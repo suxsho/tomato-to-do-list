@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>番茄专注清单 - 韩系简约风</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f6f8fa;
+      color: #2d3748;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 韩系马卡龙卡片与按钮 */
+    .k-card {
+      background: #ffffff;
+      border-radius: 24px;
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.03), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
+      border: 1px solid rgba(240, 242, 245, 0.8);
+    }
+    
+    .k-btn-primary {
+      background-color: #ff5a5f;
+      color: white;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .k-btn-primary:active {
+      transform: scale(0.96);
+      background-color: #e0484d;
+    }
+
+    /* 水波纹容器与动画 */
+    .wave-container {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #fff5f5;
+      border: 4px solid #ffe3e3;
+      transition: all 0.3s ease;
+    }
+
+    .wave {
+      position: absolute;
+      width: 360px;
+      height: 360px;
+      left: -80px;
+      background: rgba(255, 90, 95, 0.85);
+      border-radius: 40%;
+      animation: rotate 8s infinite linear;
+      transition: top 0.6s ease-in-out, background-color 0.3s ease;
+    }
+
+    .wave-back {
+      position: absolute;
+      width: 360px;
+      height: 360px;
+      left: -80px;
+      background: rgba(255, 90, 95, 0.35);
+      border-radius: 38%;
+      animation: rotate 12s infinite linear;
+      transition: top 0.6s ease-in-out, background-color 0.3s ease;
+    }
+
+    /* 暂停状态下的波纹特效：静止 + 降饱和度 */
+    .wave-container.is-paused .wave,
+    .wave-container.is-paused .wave-back {
+      animation-play-state: paused;
+      filter: grayscale(40%) opacity(0.6);
+    }
+    .wave-container.is-paused {
+      border-color: #f1f5f9;
+      background: #f8fafc;
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* 隐藏滚动条 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* 暂停状态闪烁动画 */
+    @keyframes pulse-light {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .pause-pulse {
+      animation: pulse-light 1.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="flex justify-center items-center min-h-screen p-0 sm:p-4">
+
+  <!-- 主容器 (桌面/移动端模拟壳) -->
+  <div class="w-full max-w-[414px] h-[100vh] sm:h-[844px] bg-[#f6f8fa] sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden relative border-0 sm:border-[8px] border-slate-800">
+    
+    <!-- 桌面窗口栏 -->
+    <div class="h-10 px-4 bg-white/70 backdrop-blur-md flex justify-between items-center z-20 border-b border-slate-100">
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-black tracking-tight text-slate-800">番茄专注清单</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="btn-pin-toggle" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-slate-400 bg-slate-100 text-[11px] font-bold transition hover:bg-slate-200 active:scale-95">
+          <i class="fa-solid fa-thumbtack text-[10px]"></i>
+          <span id="pin-text">置顶</span>
+        </button>
+        <div class="flex items-center gap-2 text-slate-400 text-xs pl-1">
+          <i class="fa-solid fa-minus cursor-pointer hover:text-slate-600"></i>
+          <i class="fa-regular fa-square cursor-pointer hover:text-slate-600"></i>
+          <i class="fa-solid fa-xmark cursor-pointer hover:text-slate-600"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- 视图主区域 -->
+    <div id="app-content" class="flex-1 overflow-y-auto no-scrollbar relative px-4 pt-3 pb-24">
+      
+      <!-- ================= 页面 1: 任务主页 ================= -->
+      <div id="page-tasks" class="space-y-4">
+        <div class="k-card p-5 bg-gradient-to-br from-[#fff7f7] to-[#fff0f0] border-[#ffe3e3] relative overflow-hidden">
+          <div class="flex justify-between items-start z-10 relative">
+            <div>
+              <span class="text-[11px] font-extrabold text-[#ff5a5f] tracking-wider uppercase">TODAY'S FOCUS</span>
+              <div class="flex items-baseline gap-1 mt-1">
+                <span id="stat-today-tomatoes" class="text-4xl font-extrabold text-slate-800">0</span>
+                <span class="text-sm font-semibold text-slate-500">个番茄</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-2 font-medium">
+                专注 0 分钟 · 完成任务 0 个 · 连续 0 天
+              </p>
+            </div>
+            <div class="w-14 h-14 rounded-2xl bg-white/90 backdrop-blur flex items-center justify-center shadow-sm text-2xl">
+              🍅
+            </div>
+          </div>
+        </div>
+
+        <div class="k-card p-4 space-y-3">
+          <div class="flex items-center gap-2 bg-slate-50 rounded-2xl px-3 py-2.5">
+            <input id="input-task-title" type="text" placeholder="要做什么？例如 写周报" class="bg-transparent text-xs w-full outline-none font-medium text-slate-700 placeholder-slate-400">
+            <button id="btn-add-task" class="k-btn-primary text-xs font-bold px-4 py-2 rounded-xl whitespace-nowrap shadow-sm">
+              添加
+            </button>
+          </div>
+          
+          <div class="flex items-center justify-between pt-1 px-1">
+            <span class="text-xs font-semibold text-slate-500">预估要几个番茄</span>
+            <div class="flex items-center gap-3 bg-slate-100 rounded-xl px-2 py-1">
+              <button id="btn-count-minus" class="w-6 h-6 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-600 font-bold active:scale-95">-</button>
+              <span id="input-task-count" class="text-xs font-bold text-slate-700 min-w-[12px] text-center">1</span>
+              <button id="btn-count-plus" class="w-6 h-6 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-600 font-bold active:scale-95">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center text-[11px] text-slate-400 font-medium px-1">
+          <span>番茄钟 25 / 5 / 30 分钟 · 每 4 个长休息</span>
+          <button class="text-[#ff5a5f] font-bold bg-rose-50 px-2.5 py-1 rounded-lg">设置</button>
+        </div>
+
+        <div>
+          <h3 class="text-xs font-bold text-slate-400 mb-2 px-1">待办 · 共预估 <span id="pending-total-tomatoes">1</span> 个番茄</h3>
+          <div id="pending-list" class="space-y-2"></div>
+        </div>
+
+        <div class="pt-2">
+          <div class="flex justify-between items-center mb-2 px-1">
+            <h3 class="text-xs font-bold text-slate-400">已完成</h3>
+            <button id="btn-clear-completed" class="text-[11px] font-semibold text-slate-400 hover:text-slate-600">清除已完成</button>
+          </div>
+          <div id="completed-list" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- ================= 页面 2: 专注/休息 计时器页面 ================= -->
+      <div id="page-timer" class="hidden flex-col items-center justify-between min-h-[560px] py-2">
+        
+        <!-- 顶部导航指示 -->
+        <div class="flex items-center justify-between w-full">
+          <button id="btn-timer-back" class="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-600">
+            <i class="fa-solid fa-chevron-left text-xs"></i>
+          </button>
+          
+          <!-- 关键改进 1：顶部状态胶囊 -->
+          <div id="timer-mode-badge" class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold bg-red-100 text-[#ff5a5f] transition-all">
+            <span id="badge-dot" class="w-2 h-2 rounded-full bg-[#ff5a5f]"></span>
+            <span id="badge-text">专注中</span>
+          </div>
+
+          <button class="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-600">
+            <i class="fa-solid fa-volume-high text-xs"></i>
+          </button>
+        </div>
+
+        <!-- 关键改进 2：中心水波纹 & 数字视觉 -->
+        <div class="flex flex-col items-center my-4">
+          <div id="wave-box" class="wave-container shadow-inner">
+            <div id="wave-back-el" class="wave-back" style="top: 50%;"></div>
+            <div id="wave-el" class="wave" style="top: 50%;"></div>
+          </div>
+
+          <div id="timer-display" class="text-4xl font-black text-slate-800 tracking-tight mt-5 transition-colors">
+            25:00
+          </div>
+          <p id="timer-subtext" class="text-xs font-semibold text-slate-400 mt-2">
+            本次第 1 个番茄 · 专注任务中
+          </p>
+        </div>
+
+        <!-- 关键改进 3：控制卡片与暂停恢复按钮 -->
+        <div class="w-full space-y-3">
+          <div class="k-card p-3 bg-white/80">
+            <input id="timer-note-input" type="text" placeholder="本次专注备注 (例如: 完成方案第一章)" class="w-full text-xs font-medium text-slate-700 bg-transparent outline-none placeholder-slate-400">
+          </div>
+
+          <div class="flex gap-3">
+            <button id="btn-timer-stop" class="flex-1 py-3 rounded-2xl bg-slate-200 text-slate-700 font-bold text-xs active:scale-95 transition">
+              结束
+            </button>
+            <button id="btn-timer-toggle" class="flex-[2] py-3 rounded-2xl k-btn-primary font-bold text-xs shadow-md">
+              暂停
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 底部 Tab 导航栏 -->
+    <div class="absolute bottom-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-md border-t border-slate-100 flex items-center justify-around px-2 z-30">
+      <button id="nav-tasks" class="flex flex-col items-center gap-1 text-[#ff5a5f]">
+        <i class="fa-solid fa-lemon text-base"></i>
+        <span class="text-[10px] font-bold">任务</span>
+      </button>
+      <button id="nav-stats" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600">
+        <i class="fa-solid fa-chart-simple text-base"></i>
+        <span class="text-[10px] font-bold">统计</span>
+      </button>
+      <button id="nav-mine" class="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600">
+        <i class="fa-solid fa-user text-base"></i>
+        <span class="text-[10px] font-bold">我的</span>
+      </button>
+    </div>
+
+    <!-- 全局弹窗 -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
+      <div class="k-card w-full max-w-[320px] p-6 text-center shadow-2xl bg-gradient-to-b from-white to-[#fff8f8] border-white/80 transform transition-all scale-100">
+        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-rose-50 flex items-center justify-center text-2xl shadow-inner">
+          🍅
+        </div>
+        <h3 id="modal-title" class="text-base font-extrabold text-slate-800 tracking-tight">结束本次番茄？</h3>
+        <p id="modal-desc" class="text-xs text-slate-500 mt-2 leading-relaxed px-2">
+          可以选择记录本次番茄（按实际已专注时长），或放弃本次。
+        </p>
+        <div class="flex flex-col gap-2 mt-6">
+          <button id="modal-btn-confirm" class="w-full py-3 rounded-xl k-btn-primary font-bold text-xs shadow-md shadow-rose-200">
+            记录一个番茄
+          </button>
+          <button id="modal-btn-cancel" class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-500 font-bold text-xs hover:bg-slate-200 active:scale-95 transition">
+            放弃本次番茄
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let tasks = [
+      { id: 1, title: '休息测试', estimate: 1, completedTomatoes: 0, finished: false }
+    ];
+    let isPinned = false;
+    let timerState = {
+      isRunning: false,
+      isPaused: false,
+      timeLeft: 25 * 60,
+      totalTime: 25 * 60,
+      timerId: null,
+      currentTask: null
+    };
+
+    // 置顶 Toggle
+    const btnPin = document.getElementById('btn-pin-toggle');
+    const pinText = document.getElementById('pin-text');
+    btnPin.onclick = () => {
+      isPinned = !isPinned;
+      btnPin.className = isPinned 
+        ? "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white bg-[#ff5a5f] text-[11px] font-bold shadow-sm transition active:scale-95"
+        : "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-slate-400 bg-slate-100 text-[11px] font-bold transition hover:bg-slate-200 active:scale-95";
+      pinText.innerText = isPinned ? "已置顶" : "置顶";
+    };
+
+    function renderTasks() {
+      const pendingList = document.getElementById('pending-list');
+      const completedList = document.getElementById('completed-list');
+      pendingList.innerHTML = '';
+      completedList.innerHTML = '';
+      let totalEstimate = 0;
+
+      tasks.forEach(task => {
+        if (!task.finished) {
+          totalEstimate += task.estimate;
+          const card = document.createElement('div');
+          card.className = 'k-card p-3.5 flex items-center justify-between';
+          card.innerHTML = `
+            <div class="flex items-center gap-3">
+              <button onclick="toggleTask(${task.id})" class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center text-white text-xs"></button>
+              <div>
+                <div class="text-xs font-bold text-slate-700">${task.title}</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">⚪ ${task.completedTomatoes}/${task.estimate} 个番茄 · 专注 0 分钟</div>
+              </div>
+            </div>
+            <button onclick="startFocusForTask(${task.id})" class="k-btn-primary px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm">
+              开始
+            </button>
+          `;
+          pendingList.appendChild(card);
+        } else {
+          const card = document.createElement('div');
+          card.className = 'k-card p-3.5 flex items-center justify-between opacity-75';
+          card.innerHTML = `
+            <div class="flex items-center gap-3">
+              <button onclick="toggleTask(${task.id})" class="w-5 h-5 rounded-full bg-[#ff5a5f] flex items-center justify-center text-white text-[10px]">
+                <i class="fa-solid fa-check"></i>
+              </button>
+              <div>
+                <div class="text-xs font-bold text-slate-500 line-through">${task.title}</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">${task.completedTomatoes}/${task.estimate} 个番茄</div>
+              </div>
+            </div>
+          `;
+          completedList.appendChild(card);
+        }
+      });
+
+      document.getElementById('pending-total-tomatoes').innerText = totalEstimate;
+    }
+
+    let currentInputCount = 1;
+    document.getElementById('btn-count-minus').onclick = () => {
+      if (currentInputCount > 1) {
+        currentInputCount--;
+        document.getElementById('input-task-count').innerText = currentInputCount;
+      }
+    };
+    document.getElementById('btn-count-plus').onclick = () => {
+      currentInputCount++;
+      document.getElementById('input-task-count').innerText = currentInputCount;
+    };
+
+    document.getElementById('btn-add-task').onclick = () => {
+      const input = document.getElementById('input-task-title');
+      if (!input.value.trim()) return;
+      tasks.push({
+        id: Date.now(),
+        title: input.value.trim(),
+        estimate: currentInputCount,
+        completedTomatoes: 0,
+        finished: false
+      });
+      input.value = '';
+      renderTasks();
+    };
+
+    window.toggleTask = function(id) {
+      const task = tasks.find(t => t.id === id);
+      if (task) {
+        task.finished = !task.finished;
+        renderTasks();
+      }
+    };
+
+    window.startFocusForTask = function(id) {
+      const task = tasks.find(t => t.id === id);
+      timerState.currentTask = task;
+      timerState.timeLeft = 25 * 60;
+      timerState.isPaused = false;
+      timerState.isRunning = true;
+      switchPage('timer');
+      startTimerInterval();
+    };
+
+    function switchPage(pageName) {
+      document.getElementById('page-tasks').classList.add('hidden');
+      document.getElementById('page-timer').classList.add('hidden');
+      document.getElementById('page-timer').classList.remove('flex');
+
+      if (pageName === 'tasks') document.getElementById('page-tasks').classList.remove('hidden');
+      if (pageName === 'timer') {
+        document.getElementById('page-timer').classList.remove('hidden');
+        document.getElementById('page-timer').classList.add('flex');
+      }
+    }
+
+    function updateTimerUI() {
+      const mins = Math.floor(timerState.timeLeft / 60).toString().padStart(2, '0');
+      const secs = (timerState.timeLeft % 60).toString().padStart(2, '0');
+      document.getElementById('timer-display').innerText = `${mins}:${secs}`;
+
+      const progress = (1 - timerState.timeLeft / timerState.totalTime) * 100;
+      document.getElementById('wave-el').style.top = `${100 - progress}%`;
+      document.getElementById('wave-back-el').style.top = `${95 - progress}%`;
+
+      // 视效核心逻辑：处理暂停 UI 状态转换
+      const badge = document.getElementById('timer-mode-badge');
+      const badgeDot = document.getElementById('badge-dot');
+      const badgeText = document.getElementById('badge-text');
+      const waveBox = document.getElementById('wave-box');
+      const timerDisplay = document.getElementById('timer-display');
+      const btnToggle = document.getElementById('btn-timer-toggle');
+
+      if (timerState.isPaused) {
+        // 1. 顶部胶囊转换为暖黄 "已暂停" 状态
+        badge.className = "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold bg-amber-100 text-amber-600 transition-all shadow-sm";
+        badgeDot.className = "w-2 h-2 rounded-full bg-amber-500 pause-pulse";
+        badgeText.innerText = "已暂停";
+
+        // 2. 波浪动画冻结 & 浅色化
+        waveBox.classList.add('is-paused');
+
+        // 3. 时间文本柔和化
+        timerDisplay.className = "text-4xl font-black text-slate-400 tracking-tight mt-5 pause-pulse";
+
+        // 4. 按钮样式更新为 "继续"
+        btnToggle.innerText = "继续专注";
+        btnToggle.className = "flex-[2] py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-200 transition active:scale-95";
+
+      } else {
+        // 恢复专注状态
+        badge.className = "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold bg-red-100 text-[#ff5a5f] transition-all";
+        badgeDot.className = "w-2 h-2 rounded-full bg-[#ff5a5f]";
+        badgeText.innerText = "专注中";
+
+        waveBox.classList.remove('is-paused');
+
+        timerDisplay.className = "text-4xl font-black text-slate-800 tracking-tight mt-5";
+
+        btnToggle.innerText = "暂停";
+        btnToggle.className = "flex-[2] py-3 rounded-2xl k-btn-primary font-bold text-xs shadow-md";
+      }
+    }
+
+    function startTimerInterval() {
+      clearInterval(timerState.timerId);
+      updateTimerUI();
+      timerState.timerId = setInterval(() => {
+        if (!timerState.isPaused && timerState.timeLeft > 0) {
+          timerState.timeLeft--;
+          updateTimerUI();
+        } else if (timerState.timeLeft === 0) {
+          clearInterval(timerState.timerId);
+          timerState.isRunning = false;
+          switchPage('tasks');
+        }
+      }, 1000);
+    }
+
+    // 暂停/继续 按钮切换
+    document.getElementById('btn-timer-toggle').onclick = () => {
+      timerState.isPaused = !timerState.isPaused;
+      updateTimerUI();
+    };
+
+    // 弹窗管理
+    const modal = document.getElementById('custom-modal');
+    document.getElementById('btn-timer-stop').onclick = () => {
+      modal.classList.remove('hidden');
+    };
+
+    document.getElementById('modal-btn-confirm').onclick = () => {
+      modal.classList.add('hidden');
+      clearInterval(timerState.timerId);
+      timerState.isRunning = false;
+      if (timerState.currentTask) {
+        timerState.currentTask.completedTomatoes += 1;
+      }
+      renderTasks();
+      switchPage('tasks');
+    };
+
+    document.getElementById('modal-btn-cancel').onclick = () => {
+      modal.classList.add('hidden');
+      clearInterval(timerState.timerId);
+      timerState.isRunning = false;
+      switchPage('tasks');
+    };
+
+    document.getElementById('btn-timer-back').onclick = () => {
+      modal.classList.remove('hidden');
+    };
+
+    renderTasks();
+  </script>
+</body>
+</html>

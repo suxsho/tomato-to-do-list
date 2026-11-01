@@ -1,0 +1,15 @@
+已确认的需求决策（与用户问答确定）：
+1. 技术：Flutter（SDK 在 F:\flutter，已配 PATH/国内镜像 env），优先 Windows 桌面版
+2. 提前结束选"记录一个番茄"→ 按实际已专注时长记录，计为 1 个番茄
+3. 保留暂停功能；暂停时长不计入专注；关闭软件不影响计时（按开始时间戳）
+4. 统计图表可切换 近7天/近30天/单日（单日按小时分布，带日期切换）
+5. 排序：桌面直接拖拽、移动端长按拖拽；长按/右键弹出删除
+6. 默认 25/5/30 分钟，每 4 个番茄长休息；设置可改时长与长休息时间
+7. 到时自动记录番茄并弹提醒（负数正计时），用户手动点"开始休息"才进休息；休息结束自动到"下一个番茄开始前"界面
+8. 不做：不绑定任务(自由专注)、隐私政策、关于
+9. 桌面窗口：置顶按钮、自由缩放、UI 自适应（window_manager）
+10. 备份=导出 JSON（file_picker），恢复=打开 JSON，清除历史需二次确认
+11. 提示音：运行时生成 WAV 播放（audioplayers），可在设置/我的页开关
+12. 工程创建中：flutter create tomato_timer（F:\work\project\WIN\番茄钟\tomato_timer）
+    代码先写在 _app_src/ 暂存，待 create 完成后把 lib/ 与 pubspec.yaml 覆盖进工程
+13. 待办进度：theme/models/app_state/tomato_view 已完成；剩 home/timer/stats/mine 屏 + main.dart + 组装编译运行

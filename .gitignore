@@ -1,0 +1,24 @@
+# Flutter / Dart
+tomato_timer/build/
+tomato_timer/.dart_tool/
+tomato_timer/windows/flutter/ephemeral/
+*.iml
+*.ipr
+*.iws
+.packages
+.pub-cache/
+.pub/
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 助手工作数据（不入库）
+.workbuddy/
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store
