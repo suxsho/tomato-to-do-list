@@ -48,6 +48,7 @@ class FocusRecord {
   int startTs; // 点击开始的时间戳（毫秒）
   int endTs; // 记录完成的时间戳
   int focusSec; // 实际专注秒数
+  int overtimeSec; // 到时后继续专注的超出秒数（负计时部分，0=无）
 
   FocusRecord({
     required this.id,
@@ -57,6 +58,7 @@ class FocusRecord {
     required this.startTs,
     required this.endTs,
     required this.focusSec,
+    this.overtimeSec = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -67,6 +69,7 @@ class FocusRecord {
         'startTs': startTs,
         'endTs': endTs,
         'focusSec': focusSec,
+        'overtimeSec': overtimeSec,
       };
 
   factory FocusRecord.fromJson(Map<String, dynamic> j) => FocusRecord(
@@ -77,6 +80,7 @@ class FocusRecord {
         startTs: (j['startTs'] as num).toInt(),
         endTs: (j['endTs'] as num).toInt(),
         focusSec: (j['focusSec'] as num).toInt(),
+        overtimeSec: (j['overtimeSec'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -86,6 +90,16 @@ class Settings {
   int longBreakMin;
   int longBreakEvery; // 每几个番茄长休息
   bool soundOn;
+  double volume; // 提示音音量 0.0 ~ 1.0
+  String themeMode; // 'system' | 'light' | 'dark'（默认跟随系统）
+
+  // WebDAV 云同步
+  bool webdavOn; // WebDAV 同步总开关
+  bool webdavAutoSync; // 自动同步记录（完成番茄后自动上传备份）
+  String webdavUrl; // 服务器 URL，如 https://dav.jianguoyun.com/dav/
+  String webdavUser; // 账号
+  String webdavPass; // 密码 / 应用秘钥
+  String webdavPath; // 同步文件夹路径，如 /PomodoroData/
 
   Settings({
     this.focusMin = 25,
@@ -93,7 +107,17 @@ class Settings {
     this.longBreakMin = 30,
     this.longBreakEvery = 4,
     this.soundOn = true,
+    this.volume = 1.0,
+    this.themeMode = 'system',
+    this.webdavOn = false,
+    this.webdavAutoSync = false,
+    this.webdavUrl = '',
+    this.webdavUser = '',
+    this.webdavPass = '',
+    this.webdavPath = '/PomodoroData/',
   });
+
+  bool get webdavConfigured => webdavUrl.trim().isNotEmpty && webdavUser.trim().isNotEmpty;
 
   Map<String, dynamic> toJson() => {
         'focusMin': focusMin,
@@ -101,6 +125,14 @@ class Settings {
         'longBreakMin': longBreakMin,
         'longBreakEvery': longBreakEvery,
         'soundOn': soundOn,
+        'volume': volume,
+        'themeMode': themeMode,
+        'webdavOn': webdavOn,
+        'webdavAutoSync': webdavAutoSync,
+        'webdavUrl': webdavUrl,
+        'webdavUser': webdavUser,
+        'webdavPass': webdavPass,
+        'webdavPath': webdavPath,
       };
 
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
@@ -109,6 +141,14 @@ class Settings {
         longBreakMin: (j['longBreakMin'] as num?)?.toInt() ?? 30,
         longBreakEvery: (j['longBreakEvery'] as num?)?.toInt() ?? 4,
         soundOn: j['soundOn'] != false,
+        volume: (j['volume'] as num?)?.toDouble() ?? 1.0,
+        themeMode: j['themeMode'] as String? ?? 'system',
+        webdavOn: j['webdavOn'] == true,
+        webdavAutoSync: j['webdavAutoSync'] == true,
+        webdavUrl: j['webdavUrl'] as String? ?? '',
+        webdavUser: j['webdavUser'] as String? ?? '',
+        webdavPass: j['webdavPass'] as String? ?? '',
+        webdavPath: j['webdavPath'] as String? ?? '/PomodoroData/',
       );
 }
 

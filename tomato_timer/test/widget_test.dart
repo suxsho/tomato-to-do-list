@@ -1,30 +1,33 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:tomato_timer/main.dart';
+import 'package:tomato_timer/models.dart';
+import 'package:tomato_timer/webdav.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('Settings 默认值：跟随系统主题 + WebDAV 未配置', () {
+    final s = Settings();
+    expect(s.themeMode, 'system');
+    expect(s.soundOn, isTrue);
+    expect(s.volume, 1.0);
+    expect(s.webdavOn, isFalse);
+    expect(s.webdavConfigured, isFalse);
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('Settings JSON 往返保留新增字段', () {
+    final s = Settings(themeMode: 'dark', webdavOn: true, webdavUrl: 'https://dav.example.com/dav', webdavUser: 'u');
+    final back = Settings.fromJson(s.toJson());
+    expect(back.themeMode, 'dark');
+    expect(back.webdavOn, isTrue);
+    expect(back.webdavUrl, 'https://dav.example.com/dav');
+    expect(back.webdavUser, 'u');
+    expect(back.webdavConfigured, isTrue);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  test('WebDavClient 配置校验', () {
+    final bad = WebDavClient(baseUrl: '', username: 'u', password: 'p');
+    expect(
+      () async => bad.testConnection(),
+      throwsA(isA<WebDavException>()),
+    );
   });
 }

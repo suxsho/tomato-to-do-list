@@ -50,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SoftCard(
           margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
           padding: const EdgeInsets.all(20),
-          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [AppColors.headerBg, AppColors.redBg]),
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [AppColors.headerBg, AppColors.redBg]),
           borderColor: AppColors.redLight,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -65,14 +65,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
                       children: [
-                        Text('${app.todayCount}', style: const TextStyle(color: AppColors.textDark, fontSize: 40, fontWeight: FontWeight.w800, height: 1.1)),
+                        Text('${app.todayCount}', style: TextStyle(color: AppColors.textDark, fontSize: 40, fontWeight: FontWeight.w800, height: 1.1)),
                         const SizedBox(width: 4),
-                        const Text('个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 13, fontWeight: FontWeight.w600)),
+                        Text('个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 13, fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text('专注 ${app.todayMinutes} 分钟 · 完成任务 ${app.doneTasksToday} 个 · 连续 ${app.streakDays} 天',
-                        style: const TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w500)),
+                        style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -99,8 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: TextField(
                         controller: _nameCtrl,
                         onSubmitted: (_) => _add(),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textDark),
-                        decoration: const InputDecoration(
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textDark),
+                        decoration: InputDecoration(
                           hintText: '要做什么？',
                           hintStyle: TextStyle(color: AppColors.textGray, fontSize: 13, fontWeight: FontWeight.w500),
                           filled: false,
@@ -124,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Padding(padding: EdgeInsets.only(left: 4), child: Text('预估要几个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
+                  Padding(padding: EdgeInsets.only(left: 4), child: Text('预估要几个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -134,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         _miniBtn(icon: Icons.remove, onTap: () => setState(() => _estimated = (_estimated - 1).clamp(1, 24))),
                         SizedBox(
                           width: 30,
-                          child: Text('$_estimated', textAlign: TextAlign.center, maxLines: 1, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                          child: Text('$_estimated', textAlign: TextAlign.center, maxLines: 1, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                         ),
                         _miniBtn(icon: Icons.add, onTap: () => setState(() => _estimated = (_estimated + 1).clamp(1, 24))),
                       ],
@@ -152,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Expanded(
                 child: Text('番茄钟 ${app.settings.focusMin} / ${app.settings.shortBreakMin} / ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
-                    style: const TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600)),
+                    style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
               GestureDetector(
                 onTap: () => showSettingsDialog(context),
@@ -188,11 +188,11 @@ class _HomeScreenState extends State<HomeScreen> {
         // 待办列表
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
-          child: Text('待办 · 共预估 $estTotal 个番茄', style: const TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.bold)),
+          child: Text('待办 · 共预估 $estTotal 个番茄', style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.bold)),
         ),
         if (todo.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
             child: Text('还没有待办，先添加一个吧', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textGray, fontSize: 13)),
           )
         else
@@ -212,10 +212,10 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
             child: Row(
               children: [
-                Expanded(child: Text('已完成', style: const TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(child: Text('已完成', style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.bold))),
                 GestureDetector(
                   onTap: () => app.clearCompleted(),
-                  child: const Text('清除已完成', style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600)),
+                  child: Text('清除已完成', style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -280,7 +280,7 @@ class _TaskCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: isDone ? AppColors.textMid : const Color(0xFF334155),
+                        color: isDone ? AppColors.textMid : AppColors.textDark,
                         decoration: isDone ? TextDecoration.lineThrough : null,
                       )),
                   const SizedBox(height: 4),
@@ -302,7 +302,7 @@ class _TaskCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text('${task.completed}/${task.estimated} 个番茄 · 专注 ${task.focusSec ~/ 60} 分钟',
-                          style: const TextStyle(fontSize: 10, color: AppColors.textGray)),
+                          style: TextStyle(fontSize: 10, color: AppColors.textGray)),
                     ],
                   ),
                 ],
@@ -355,9 +355,10 @@ class _TaskCard extends StatelessWidget {
           width: 320,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.white, Color(0xFFFFF8F8)]),
+            color: AppColors.card, // 实色打底，防止渐变透明导致透底
+            gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: AppColors.modalGradient),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white70),
+            border: Border.all(color: AppColors.cardBorder),
             boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 40, offset: Offset(0, 16))],
           ),
           child: Column(
@@ -376,10 +377,10 @@ class _TaskCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 '该任务的番茄计数会保留在历史记录中。',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: AppColors.textMid, height: 1.6),
@@ -410,7 +411,7 @@ class _TaskCard extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(12)),
-                  child: const Text('取消', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMid, fontSize: 13, fontWeight: FontWeight.bold)),
+                  child: Text('取消', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMid, fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

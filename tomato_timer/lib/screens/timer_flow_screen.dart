@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -158,13 +160,13 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
                                   : isBreak
                                       ? '休息也是一个番茄的一环'
                                       : '下一个：专注 ${app.settings.focusMin} 分钟 · 第 ${s.pomodoroNo + 1} 个番茄',
-                              style: const TextStyle(color: AppColors.textGray, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: TextStyle(color: AppColors.textGray, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                             // 当前任务名
                             if (s.taskName.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               Text(s.taskName,
-                                  style: const TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w800),
+                                  style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w800),
                                   overflow: TextOverflow.ellipsis,
                                   textAlign: TextAlign.center),
                             ],
@@ -173,16 +175,31 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
                       ),
                     ),
                     // 周期圆点 + 任务进度
+                    // 有任务：圆点数量跟随任务的预估番茄数（实际超过预估时圆点随之增加）
+                    // 无任务：保持"每 N 个番茄长休息"的周期圆点
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        ...List.generate(app.settings.longBreakEvery, (i) {
-                          final filled = s.phase == SessionPhase.longBreak || i < s.cycleDone % app.settings.longBreakEvery;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            child: Icon(Icons.circle, size: 10, color: filled ? accent : AppColors.slate300),
-                          );
-                        }),
+                        ...() {
+                          final t = app.currentTask;
+                          if (t != null) {
+                            final total = math.max(t.estimated, t.completed).clamp(1, 24);
+                            return List.generate(total, (i) {
+                              final filled = i < t.completed;
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 3),
+                                child: Icon(Icons.circle, size: 10, color: filled ? accent : AppColors.slate300),
+                              );
+                            });
+                          }
+                          return List.generate(app.settings.longBreakEvery, (i) {
+                            final filled = s.phase == SessionPhase.longBreak || i < s.cycleDone % app.settings.longBreakEvery;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 3),
+                              child: Icon(Icons.circle, size: 10, color: filled ? accent : AppColors.slate300),
+                            );
+                          });
+                        }(),
                         const SizedBox(width: 8),
                         Builder(builder: (_) {
                           final t = app.currentTask;
@@ -190,7 +207,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
                             t == null
                                 ? '每 ${app.settings.longBreakEvery} 个番茄后长休息'
                                 : '${t.name} · 已完成 ${t.completed}/${t.estimated} 个',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray),
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray),
                             overflow: TextOverflow.ellipsis,
                           );
                         }),
@@ -210,8 +227,8 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
                         child: TextField(
                           controller: _noteCtrl,
                           onChanged: app.updateNote,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textDark),
-                          decoration: const InputDecoration(
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textDark),
+                          decoration: InputDecoration(
                             hintText: '本次专注备注（例如：完成方案第一章）',
                             hintStyle: TextStyle(color: AppColors.textGray, fontSize: 12, fontWeight: FontWeight.w500),
                             border: InputBorder.none,
@@ -262,7 +279,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text('番茄时间已结束', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark)),
+                              Text('番茄时间已结束', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark)),
                               const SizedBox(height: 16),
                               Text('- ${fmtSec(app.overtimeSec)}', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: AppColors.red)),
                               const SizedBox(height: 20),
@@ -331,10 +348,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
   }
 
   void _onBack(BuildContext context, AppState app, Session s) {
-    if (s.phase == SessionPhase.focus && !s.ended) {
-      _confirmEnd(context, app, s);
-      return;
-    }
+    // 专注中直接返回：计时按时间戳继续，不弹确认（主界面可点"进行中的番茄"回来）
     Navigator.of(context).pop();
   }
 
@@ -347,30 +361,31 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
         child: Container(
           width: 320,
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.white, Color(0xFFFFF8F8)]),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white70),
-            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 40, offset: Offset(0, 16))],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 番茄图标块
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(color: AppColors.redBg, borderRadius: BorderRadius.circular(16)),
-                child: Center(child: TomatoView(full: true, size: 34)),
-              ),
-              const SizedBox(height: 12),
-              const Text('结束本次番茄？', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-              const SizedBox(height: 8),
-              const Text(
-                '可以选择记录本次番茄（按实际已专注时长），或放弃本次。',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.textMid, height: 1.6),
-              ),
+                        decoration: BoxDecoration(
+                          color: AppColors.card, // 实色打底，防止渐变透明导致透底
+                          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: AppColors.modalGradient),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: AppColors.cardBorder),
+                          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 40, offset: Offset(0, 16))],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 番茄图标块
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(color: AppColors.redBg, borderRadius: BorderRadius.circular(16)),
+                              child: Center(child: TomatoView(full: true, size: 34)),
+                            ),
+                            const SizedBox(height: 12),
+                            Text('结束本次番茄？', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
+                            const SizedBox(height: 8),
+                            Text(
+                              '可以选择记录本次番茄（按实际已专注时长），或放弃本次。',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, color: AppColors.textMid, height: 1.6),
+                            ),
               const SizedBox(height: 22),
               // 记录一个番茄
               GestureDetector(
@@ -402,7 +417,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(12)),
-                  child: const Text('放弃本次番茄', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMid, fontSize: 13, fontWeight: FontWeight.bold)),
+                  child: Text('放弃本次番茄', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMid, fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

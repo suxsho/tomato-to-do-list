@@ -40,13 +40,13 @@ class _StatsScreenState extends State<StatsScreen> {
     return ListView(
       padding: const EdgeInsets.only(top: 8, bottom: 24),
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(20, 8, 20, 2),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 2),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('专注统计', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-              SizedBox(height: 2),
+              const SizedBox(height: 2),
               Text('完成的番茄才会计入，放弃的不算', style: TextStyle(fontSize: 11, color: AppColors.textGray, fontWeight: FontWeight.w500)),
             ],
           ),
@@ -72,7 +72,7 @@ class _StatsScreenState extends State<StatsScreen> {
               Row(
                 children: [
                   Text(_mode == ChartMode.singleDay ? '单日番茄分布' : '近 ${_mode == ChartMode.last7 ? 7 : 30} 天番茄数',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                   const Spacer(),
                   if (_mode == ChartMode.singleDay)
                     Row(
@@ -82,7 +82,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           icon: const Icon(Icons.chevron_left, size: 18),
                           onPressed: () => setState(() => _day = _day.subtract(const Duration(days: 1))),
                         ),
-                        Text('${_day.month}/${_day.day}', style: const TextStyle(fontSize: 12, color: AppColors.textGray, fontWeight: FontWeight.w600)),
+                        Text('${_day.month}/${_day.day}', style: TextStyle(fontSize: 12, color: AppColors.textGray, fontWeight: FontWeight.w600)),
                         IconButton(
                           visualDensity: VisualDensity.compact,
                           icon: const Icon(Icons.chevron_right, size: 18),
@@ -95,7 +95,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     )
                   else
                     Text('共 ${_mode == ChartMode.last7 ? app.dailyCounts(7).fold(0, (a, e) => a + e.$2) : app.dailyCounts(30).fold(0, (a, e) => a + e.$2)} 个',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textGray, fontWeight: FontWeight.w600)),
+                        style: TextStyle(fontSize: 11, color: AppColors.textGray, fontWeight: FontWeight.w600)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -110,12 +110,12 @@ class _StatsScreenState extends State<StatsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('按任务的专注时长', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+              Text('按任务的专注时长', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
               const SizedBox(height: 8),
               _segment(['近 7 天', '全部'], _taskLast7 ? 0 : 1, (i) => setState(() => _taskLast7 = i == 0)),
               const SizedBox(height: 8),
               ...app.taskFocusStats(last7: _taskLast7).asMap().entries.map((e) {
-                final (rank, name, minutes, count) = (e.key + 1, e.value.$2, e.value.$3, e.value.$4);
+                final (rank, name, minutes, count, otMin) = (e.key + 1, e.value.$2, e.value.$3, e.value.$4, e.value.$5);
                 final maxMin = app.taskFocusStats(last7: _taskLast7).fold<int>(1, (a, x) => x.$3 > a ? x.$3 : a);
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -126,8 +126,9 @@ class _StatsScreenState extends State<StatsScreen> {
                         children: [
                           Text('$rank', style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w800, fontSize: 12)),
                           const SizedBox(width: 10),
-                          Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12), overflow: TextOverflow.ellipsis)),
-                          Text('$minutes 分钟', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12)),
+                          Expanded(child: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12), overflow: TextOverflow.ellipsis)),
+                          // 超过 1 分钟的到时超时（负计时）显示为 "25+1 分钟"
+                          Text('$minutes${otMin > 0 ? '+$otMin' : ''} 分钟', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12)),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -141,13 +142,13 @@ class _StatsScreenState extends State<StatsScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text('$count 个番茄', style: const TextStyle(fontSize: 10, color: AppColors.textGray)),
+                      Text('$count 个番茄', style: TextStyle(fontSize: 10, color: AppColors.textGray)),
                     ],
                   ),
                 );
               }),
               if (app.taskFocusStats(last7: _taskLast7).isEmpty)
-                const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('暂无数据', style: TextStyle(color: AppColors.textGray, fontSize: 12))),
+                Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text('暂无数据', style: TextStyle(color: AppColors.textGray, fontSize: 12))),
             ],
           ),
         ),
@@ -156,15 +157,15 @@ class _StatsScreenState extends State<StatsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('最近专注记录', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+              Text('最近专注记录', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
               const SizedBox(height: 4),
               ...recent.map((r) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    title: Text(r.taskName, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 13)),
+                    title: Text(r.taskName, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 13)),
                     subtitle: Text(
                       '${_dayLabel(r.startTs)} · ${r.focusSec ~/ 60} 分钟${r.note.isNotEmpty ? ' · ${r.note}' : ''}',
-                      style: const TextStyle(fontSize: 10, color: AppColors.textGray),
+                      style: TextStyle(fontSize: 10, color: AppColors.textGray),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -175,12 +176,12 @@ class _StatsScreenState extends State<StatsScreen> {
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => app.deleteRecord(r.id),
-                          child: const Icon(Icons.close, size: 16, color: AppColors.textGray),
+                          child: Icon(Icons.close, size: 16, color: AppColors.textGray),
                         ),
                       ],
                     ),
                   )),
-              if (recent.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('还没有完成的番茄', style: TextStyle(color: AppColors.textGray, fontSize: 12))),
+              if (recent.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text('还没有完成的番茄', style: TextStyle(color: AppColors.textGray, fontSize: 12))),
             ],
           ),
         ),
@@ -195,7 +196,7 @@ class _StatsScreenState extends State<StatsScreen> {
         padding: const EdgeInsets.symmetric(vertical: 14),
         child: Column(
           children: [
-            Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textGray)),
+            Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textGray)),
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -203,7 +204,7 @@ class _StatsScreenState extends State<StatsScreen> {
               textBaseline: TextBaseline.alphabetic,
               children: [
                 Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: valueColor)),
-                Text(unit, style: const TextStyle(fontSize: 11, color: AppColors.textMid)),
+                Text(unit, style: TextStyle(fontSize: 11, color: AppColors.textMid)),
               ],
             ),
           ],
@@ -257,7 +258,7 @@ class _StatsScreenState extends State<StatsScreen> {
               reservedSize: 20,
               getTitlesWidget: (v, _) => Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('${v.toInt()}时', style: const TextStyle(fontSize: 9, color: AppColors.textGray)),
+                child: Text('${v.toInt()}时', style: TextStyle(fontSize: 9, color: AppColors.textGray)),
               ),
             ),
           ),

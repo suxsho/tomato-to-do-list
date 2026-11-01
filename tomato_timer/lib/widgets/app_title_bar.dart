@@ -63,8 +63,8 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
         child: Container(
           height: 40,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.75),
-            border: const Border(bottom: BorderSide(color: AppColors.slate100)),
+            color: AppColors.barBg,
+            border: Border(bottom: BorderSide(color: AppColors.slate100)),
           ),
           child: Row(
             children: [
@@ -74,8 +74,8 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                   onDoubleTap: _toggleMaximize,
                   child: DragToMoveArea(
                     child: Row(
-                      children: const [
-                        SizedBox(width: 16),
+                      children: [
+                        const SizedBox(width: 16),
                         Text('番茄任务清单',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.textDark, letterSpacing: -0.2)),
                       ],

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'webdav.dart';
 import 'windows_flash.dart';
 
 /// 全局应用状态：数据 + 计时核心逻辑
@@ -25,11 +25,15 @@ class AppState extends ChangeNotifier {
   Settings settings = Settings();
   Session? session;
 
+  /// 最近一次 WebDAV 同步状态提示（null = 无）
+  String? webdavStatus;
+
   Timer? _ticker;
+  bool _syncing = false;
   final AudioPlayer _bellPlayer = AudioPlayer();
   final AudioPlayer _tickPlayer = AudioPlayer();
   String? _bellPath;
-  String? _tickPath;
+  static const _tickAsset = 'sounds/tick.wav'; // 打包的"咔咔"声音效
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -52,6 +56,10 @@ class AppState extends ChangeNotifier {
     }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     _onTick();
+    // 系统深浅色切换时，若主题为"跟随系统"则刷新界面
+    PlatformDispatcher.instance.onPlatformBrightnessChanged = () {
+      if (settings.themeMode == 'system') notifyListeners();
+    };
     notifyListeners();
   }
 
@@ -194,9 +202,14 @@ class AppState extends ChangeNotifier {
   void finishEarly({required bool record}) {
     final s = session;
     if (s == null) return;
-    if (record && s.phase == SessionPhase.focus) {
-      final actual = math.min(elapsedSec, s.durationSec);
-      _recordPomodoro(actual);
+    if (s.phase == SessionPhase.focus) {
+      if (s.ended) {
+        // 已自然到时并记录过番茄：只补记超时（负计时），不重复记录
+        _applyOvertime();
+      } else if (record) {
+        final actual = math.min(elapsedSec, s.durationSec);
+        _recordPomodoro(actual);
+      }
     }
     session = null;
     _saveSession();
@@ -207,6 +220,7 @@ class AppState extends ChangeNotifier {
   void startBreak() {
     final s = session;
     if (s == null || s.phase != SessionPhase.focus) return;
+    _applyOvertime(); // 补记等待期间的超时分钟
     final isLong = s.cycleDone > 0 && s.cycleDone % settings.longBreakEvery == 0;
     s.phase = isLong ? SessionPhase.longBreak : SessionPhase.shortBreak;
     s.startTs = DateTime.now().millisecondsSinceEpoch;
@@ -234,6 +248,7 @@ class AppState extends ChangeNotifier {
   void startNextPomodoro() {
     final s = session;
     if (s == null || s.phase != SessionPhase.preStart) return;
+    // 跳过休息直接开下一轮时，超时已在 startBreak/skipBreak 前补记
     s.phase = SessionPhase.focus;
     s.startTs = DateTime.now().millisecondsSinceEpoch;
     s.pausedAccumMs = 0;
@@ -275,6 +290,24 @@ class AppState extends ChangeNotifier {
     }
     s.cycleDone += 1;
     _saveRecords();
+    // 自动同步：完成一个番茄后把备份上传到 WebDAV
+    if (settings.webdavOn && settings.webdavAutoSync && settings.webdavConfigured) {
+      uploadToCloud(auto: true);
+    }
+  }
+
+  /// 自然到时后用户停留期间产生的超时秒数（负计时），补记到刚才那条记录上。
+  /// 只在“到时已记录、尚未进入下一阶段”的窗口内生效一次。
+  void _applyOvertime() {
+    final s = session;
+    if (s == null || s.phase != SessionPhase.focus || !s.ended) return;
+    final ot = math.max(0, elapsedSec - s.durationSec);
+    if (ot <= 0 || records.isEmpty) return;
+    final r = records.last;
+    if (r.overtimeSec == 0 && r.focusSec == s.durationSec && r.taskId == s.taskId) {
+      r.overtimeSec = ot;
+      _saveRecords();
+    }
   }
 
   // ---------- 设置 ----------
@@ -284,10 +317,129 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 深色模式：'system'（跟随系统，默认）/ 'light' / 'dark'
+  void setThemeMode(String mode) {
+    settings.themeMode = mode;
+    _saveSettings();
+    notifyListeners();
+  }
+
   void toggleSound() {
     settings.soundOn = !settings.soundOn;
     _saveSettings();
     notifyListeners();
+  }
+
+  /// 调节提示音音量（0.0 ~ 1.0），立即生效
+  void setVolume(double v) {
+    settings.volume = v.clamp(0.0, 1.0);
+    _saveSettings();
+    _bellPlayer.setVolume(settings.volume);
+    _tickPlayer.setVolume(settings.volume);
+    notifyListeners();
+  }
+
+  // ---------- WebDAV ----------
+  WebDavClient? _webdavClient() {
+    if (!settings.webdavConfigured) return null;
+    return WebDavClient(
+      baseUrl: settings.webdavUrl,
+      username: settings.webdavUser,
+      password: settings.webdavPass,
+      folder: settings.webdavPath,
+    );
+  }
+
+  void toggleWebdav() {
+    settings.webdavOn = !settings.webdavOn;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void toggleWebdavAutoSync() {
+    settings.webdavAutoSync = !settings.webdavAutoSync;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void saveWebdavConfig({required String url, required String user, required String pass, required String path}) {
+    settings.webdavUrl = url.trim();
+    settings.webdavUser = user.trim();
+    settings.webdavPass = pass;
+    settings.webdavPath = path.trim().isEmpty ? '/PomodoroData/' : path.trim();
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void _setWebdavStatus(String? msg) {
+    webdavStatus = msg;
+    notifyListeners();
+  }
+
+  /// 上传备份到云端（auto=true 表示自动同步触发，静默失败仅记状态）
+  Future<bool> uploadToCloud({bool auto = false}) async {
+    if (_syncing) return false;
+    final client = _webdavClient();
+    if (client == null) {
+      if (!auto) _setWebdavStatus('请先在 WebDav 配置中填写服务器信息');
+      return false;
+    }
+    _syncing = true;
+    if (!auto) _setWebdavStatus('正在上传备份…');
+    try {
+      final now = DateTime.now();
+      final name =
+          'tomato_backup_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}.json';
+      await client.upload(name, exportJson());
+      _setWebdavStatus('已上传备份 $name');
+      return true;
+    } on WebDavException catch (e) {
+      _setWebdavStatus(auto ? '自动同步失败：${e.message}' : e.message);
+    } catch (e) {
+      _setWebdavStatus('上传失败：$e');
+    } finally {
+      _syncing = false;
+    }
+    return false;
+  }
+
+  /// 从云端恢复最新一份备份
+  Future<bool> restoreFromCloud() async {
+    if (_syncing) return false;
+    final client = _webdavClient();
+    if (client == null) {
+      _setWebdavStatus('请先在 WebDav 配置中填写服务器信息');
+      return false;
+    }
+    _syncing = true;
+    _setWebdavStatus('正在从云端恢复…');
+    try {
+      final list = await client.listBackups();
+      if (list.isEmpty) {
+        _setWebdavStatus('云端还没有备份文件');
+        return false;
+      }
+      final raw = await client.download(list.first);
+      final ok = importJson(raw);
+      _setWebdavStatus(ok ? '已恢复云端备份 ${list.first}' : '云端备份文件格式不正确');
+      return ok;
+    } on WebDavException catch (e) {
+      _setWebdavStatus(e.message);
+    } catch (e) {
+      _setWebdavStatus('恢复失败：$e');
+    } finally {
+      _syncing = false;
+    }
+    return false;
+  }
+
+  /// WebDAV 配置弹窗里"测试连接"
+  Future<void> testWebdavConnection() async {
+    final client = _webdavClient();
+    if (client == null) {
+      throw const WebDavException('请填写服务器 URL 和账号');
+    }
+    await client.testConnection();
   }
 
   // ---------- 统计 ----------
@@ -344,20 +496,22 @@ class AppState extends ChangeNotifier {
   }
 
   /// 按任务的专注时长（last7=true 时只统计近 7 天）
-  List<(Task?, String, int, int)> taskFocusStats({required bool last7}) {
+  /// 返回 (任务, 名称, 专注分钟, 番茄数, 超时分钟)——超时分钟来自到时后的负计时
+  List<(Task?, String, int, int, int)> taskFocusStats({required bool last7}) {
     final since = DateTime.now().subtract(const Duration(days: 7)).millisecondsSinceEpoch;
-    final byName = <String, (int, int, String?)>{}; // name -> (sec, count, taskId)
+    final byName = <String, (int, int, int, String?)>{}; // name -> (sec, count, overtimeSec, taskId)
     for (final r in records) {
       if (last7 && r.startTs < since) continue;
-      final cur = byName[r.taskName] ?? (0, 0, r.taskId);
-      byName[r.taskName] = (cur.$1 + r.focusSec, cur.$2 + 1, r.taskId);
+      final cur = byName[r.taskName] ?? (0, 0, 0, r.taskId);
+      byName[r.taskName] = (cur.$1 + r.focusSec, cur.$2 + 1, cur.$3 + r.overtimeSec, r.taskId);
     }
     final list = byName.entries
         .map((e) => (
-              tasks.where((t) => t.id == e.value.$3).firstOrNull,
+              tasks.where((t) => t.id == e.value.$4).firstOrNull,
               e.key,
               e.value.$1 ~/ 60,
               e.value.$2,
+              e.value.$3 ~/ 60,
             ))
         .toList()
       ..sort((a, b) => b.$3.compareTo(a.$3));
@@ -410,36 +564,37 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---------- 提示音（运行时生成 WAV，无需外部资源） ----------
-  /// 到时铃声（双音"叮—咚"）
+  // ---------- 提示音 ----------
+  /// 到时铃声（运行时生成 WAV"叮—咚"）
   Future<void> _playBell() async {
     if (!settings.soundOn) return;
     try {
       await _ensureSounds();
+      await _bellPlayer.setVolume(settings.volume);
       await _bellPlayer.stop();
       await _bellPlayer.play(DeviceFileSource(_bellPath!));
     } catch (_) {}
   }
 
-  /// 专注倒计时"咔咔"声
+  /// 专注倒计时"咔咔"声（assets/sounds/tick.wav）
   Future<void> _playTick() async {
     if (!settings.soundOn) return;
     try {
-      await _ensureSounds();
+      await _tickPlayer.setVolume(settings.volume);
       await _tickPlayer.stop();
-      await _tickPlayer.play(DeviceFileSource(_tickPath!));
+      await _tickPlayer.play(AssetSource(_tickAsset));
     } catch (_) {}
   }
 
+  /// 设置里试听"咔咔"声
+  Future<void> previewTick() => _playTick();
+
   Future<void> _ensureSounds() async {
-    if (_bellPath != null && _tickPath != null) return;
+    if (_bellPath != null) return;
     final dir = await getTemporaryDirectory();
     final bell = File('${dir.path}${Platform.pathSeparator}tomato_bell.wav');
     if (!await bell.exists()) await bell.writeAsBytes(_buildWav(_bellSamples()));
     _bellPath = bell.path;
-    final tick = File('${dir.path}${Platform.pathSeparator}tomato_tick.wav');
-    if (!await tick.exists()) await tick.writeAsBytes(_buildWav(_tickSamples()));
-    _tickPath = tick.path;
   }
 
   /// 把 -1..1 的采样列表打包成 16bit 单声道 WAV
@@ -492,27 +647,6 @@ class AppState extends ChangeNotifier {
 
     tone(0, 250, 988, 0.35);
     tone(220, 480, 1319, 0.35);
-    return out;
-  }
-
-  /// 倒计时"咔咔"声：两声短促咔哒（模拟机械滴答）
-  List<double> _tickSamples() {
-    const sr = 44100;
-    const totalMs = 130;
-    final out = List<double>.filled(sr * totalMs ~/ 1000, 0);
-    void click(double startMs, double gain) {
-      final start = startMs * sr ~/ 1000;
-      final len = 28 * sr ~/ 1000;
-      for (var i = 0; i < len && start + i < out.length; i++) {
-        final t = i / sr;
-        final env = math.exp(-t * 320);
-        final v = gain * env * math.sin(2 * math.pi * 1900 * t);
-        out[start + i] += v;
-      }
-    }
-
-    click(0, 0.5);
-    click(72, 0.35);
     return out;
   }
 

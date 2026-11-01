@@ -179,7 +179,7 @@ class _TomatoPainter extends CustomPainter {
     final dashPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..color = Colors.black26;
+      ..color = AppColors.dash;
     _drawDashedCircle(canvas, center, radius, dashPaint);
 
     final l = level ?? 0;

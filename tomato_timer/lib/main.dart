@@ -40,16 +40,32 @@ class TomatoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    // 主题模式：跟随系统（默认）/ 浅色 / 深色；同步 AppColors 运行时深色标志
+    final mode = switch (app.settings.themeMode) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+    final platformDark = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    AppColors.dark = mode == ThemeMode.dark || (mode == ThemeMode.system && platformDark);
+
     return MaterialApp(
       title: '番茄任务清单',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        scaffoldBackgroundColor: AppColors.pageBg,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.red, surface: AppColors.pageBg),
-        fontFamily: 'Microsoft YaHei',
-        useMaterial3: true,
-      ),
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: mode,
       home: const MainShell(),
+    );
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    return ThemeData(
+      scaffoldBackgroundColor: AppColors.pageBg,
+      colorScheme: ColorScheme.fromSeed(seedColor: AppColors.red, brightness: brightness, surface: AppColors.pageBg),
+      fontFamily: 'Microsoft YaHei',
+      useMaterial3: true,
     );
   }
 }
@@ -83,8 +99,8 @@ class _MainShellState extends State<MainShell> {
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.9),
-              border: const Border(top: BorderSide(color: AppColors.slate100)),
+              color: AppColors.barBg,
+              border: Border(top: BorderSide(color: AppColors.cardBorder)),
             ),
             child: SafeArea(
               top: false,
