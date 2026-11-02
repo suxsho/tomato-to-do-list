@@ -92,6 +92,10 @@ class Settings {
   bool soundOn;
   double volume; // 提示音音量 0.0 ~ 1.0
   String themeMode; // 'system' | 'light' | 'dark'（默认跟随系统）
+  bool burnInProtectOn; // 防烧屏模式：专注中屏幕变黑+内容周期浮动（OLED 保护）
+  bool keepScreenOn; // 专注时屏幕常亮（仅安卓生效/可见）
+  bool vibrateOn; // 到时震动提醒（仅安卓生效/可见）
+  bool notifyOn; // 计时到点发系统通知（安卓通知栏 / Windows 托盘气泡）
 
   // WebDAV 云同步
   bool webdavOn; // WebDAV 同步总开关
@@ -109,6 +113,10 @@ class Settings {
     this.soundOn = true,
     this.volume = 1.0,
     this.themeMode = 'system',
+    this.burnInProtectOn = false,
+    this.keepScreenOn = true,
+    this.vibrateOn = true,
+    this.notifyOn = true,
     this.webdavOn = false,
     this.webdavAutoSync = false,
     this.webdavUrl = '',
@@ -127,6 +135,10 @@ class Settings {
         'soundOn': soundOn,
         'volume': volume,
         'themeMode': themeMode,
+        'burnInProtectOn': burnInProtectOn,
+        'keepScreenOn': keepScreenOn,
+        'vibrateOn': vibrateOn,
+        'notifyOn': notifyOn,
         'webdavOn': webdavOn,
         'webdavAutoSync': webdavAutoSync,
         'webdavUrl': webdavUrl,
@@ -143,6 +155,10 @@ class Settings {
         soundOn: j['soundOn'] != false,
         volume: (j['volume'] as num?)?.toDouble() ?? 1.0,
         themeMode: j['themeMode'] as String? ?? 'system',
+        burnInProtectOn: j['burnInProtectOn'] == true,
+        keepScreenOn: j['keepScreenOn'] != false,
+        vibrateOn: j['vibrateOn'] != false,
+        notifyOn: j['notifyOn'] != false,
         webdavOn: j['webdavOn'] == true,
         webdavAutoSync: j['webdavAutoSync'] == true,
         webdavUrl: j['webdavUrl'] as String? ?? '',

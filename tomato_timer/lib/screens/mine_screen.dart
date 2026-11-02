@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import '../app_state.dart';
 import '../theme.dart';
 import '../webdav.dart';
 import '../widgets/tomato_view.dart';
+import 'settings_dialog.dart';
 
 const _sky = Color(0xFF0EA5E9); // WebDAV 云同步主题色（对应原型 sky-500）
 
@@ -256,7 +258,7 @@ class MineScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text('番茄任务清单', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
               const SizedBox(height: 2),
-              Text('Minimal Focus Timer v0.1.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+              Text('Minimal Focus Timer v0.2.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -279,7 +281,7 @@ class MineScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('任务配番茄，专注一个接一个。纯离线、零权限的极简效率工具。',
+                      child: Text('任务配番茄，专注一个接一个。本地优先、云同步可选的极简效率工具。',
                           style: TextStyle(fontSize: 11, color: AppColors.textMid, height: 1.6)),
                     ),
                   ],
@@ -344,32 +346,77 @@ class MineScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                child: const Text('版本 0.1.0 · 纯离线 · 零权限', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: const Text('版本 0.2.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
         ),
-        // 提示音
+        // 番茄钟设置（从首页移到这里）
+        SoftCard(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: _row(
+            context,
+            Icons.timer_outlined,
+            '番茄钟设置',
+            '专注 ${app.settings.focusMin} / 短休 ${app.settings.shortBreakMin} / 长休 ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
+            () => showSettingsDialog(context),
+            iconColor: AppColors.red,
+          ),
+        ),
+        // 提示音 + 音量
+        SoftCard(
+          padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.volume_up, color: AppColors.red),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('提示音', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
+                        Text('专注时滴答声 · 结束时响铃提醒', style: TextStyle(fontSize: 12, color: AppColors.textGray)),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: app.settings.soundOn,
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: AppColors.red,
+                    onChanged: (_) => app.toggleSound(),
+                  ),
+                ],
+              ),
+              if (app.settings.soundOn) const _VolumeSlider(),
+            ],
+          ),
+        ),
+        // 到时系统通知
         SoftCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
             children: [
-              Icon(Icons.volume_up, color: AppColors.red),
+              Icon(Icons.notifications_active_outlined, color: AppColors.red),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('提示音', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
-                    Text('专注时滴答声 · 结束时响铃提醒', style: TextStyle(fontSize: 12, color: AppColors.textGray)),
+                    Text('到时通知', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
+                    Text(
+                      (!kIsWeb && Platform.isAndroid) ? '番茄到点发到通知栏，锁屏也能看到' : '番茄到点弹桌面通知，并让任务栏闪烁',
+                      style: TextStyle(fontSize: 12, color: AppColors.textGray),
+                    ),
                   ],
                 ),
               ),
               Switch(
-                value: app.settings.soundOn,
+                value: app.settings.notifyOn,
                 activeThumbColor: Colors.white,
                 activeTrackColor: AppColors.red,
-                onChanged: (_) => app.toggleSound(),
+                onChanged: (_) => app.toggleNotify(),
               ),
             ],
           ),
@@ -456,6 +503,59 @@ class MineScreen extends StatelessWidget {
       subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: AppColors.textGray)),
       trailing: showArrow ? Icon(Icons.chevron_right, color: AppColors.slate300, size: 18) : null,
       onTap: onTap,
+    );
+  }
+}
+
+/// 提示音音量（拖动结束才落盘，避免每帧写 SharedPreferences）
+class _VolumeSlider extends StatefulWidget {
+  const _VolumeSlider();
+
+  @override
+  State<_VolumeSlider> createState() => _VolumeSliderState();
+}
+
+class _VolumeSliderState extends State<_VolumeSlider> {
+  double _v = 1;
+  bool _inited = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_inited) {
+      _v = context.read<AppState>().settings.volume;
+      _inited = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.read<AppState>();
+    final icon = _v <= 0.01 ? Icons.volume_off : (_v < 0.5 ? Icons.volume_down : Icons.volume_up);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.textGray),
+          Expanded(
+            child: Slider(
+              value: _v.clamp(0.0, 1.0),
+              activeColor: AppColors.red,
+              onChanged: (v) => setState(() => _v = v),
+              onChangeEnd: (v) {
+                app.setVolume(v);
+                if (v > 0.01) app.previewTick();
+              },
+            ),
+          ),
+          SizedBox(
+            width: 38,
+            child: Text('${(_v * 100).round()}%',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMid)),
+          ),
+        ],
+      ),
     );
   }
 }

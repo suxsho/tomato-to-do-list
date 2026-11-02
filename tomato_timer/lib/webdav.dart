@@ -108,6 +108,12 @@ class WebDavClient {
     _check(status, '上传', ok: {200, 201, 204});
   }
 
+  /// 删除远程文件
+  Future<void> delete(String fileName) async {
+    final (status, _) = await _request('DELETE', _uri(fileName));
+    _check(status, '删除', ok: {200, 202, 204});
+  }
+
   /// 列出目录下的 .json 备份文件名（按名称倒序 = 新的在前）
   Future<List<String>> listBackups() async {
     final (status, body) = await _request('PROPFIND', _uri(''), body: _propfindBody);

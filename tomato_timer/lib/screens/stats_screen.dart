@@ -17,7 +17,8 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   ChartMode _mode = ChartMode.last7;
-  bool _taskLast7 = true;
+  int _taskMode = 0; // 0=近 7 天 1=全部 2=单日
+  DateTime _taskDay = DateTime.now();
   DateTime _day = DateTime.now();
 
   String _dayLabel(int ts) {
@@ -106,52 +107,80 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         ),
         // 按任务专注时长
-        SoftCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('按任务的专注时长', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-              const SizedBox(height: 8),
-              _segment(['近 7 天', '全部'], _taskLast7 ? 0 : 1, (i) => setState(() => _taskLast7 = i == 0)),
-              const SizedBox(height: 8),
-              ...app.taskFocusStats(last7: _taskLast7).asMap().entries.map((e) {
-                final (rank, name, minutes, count, otMin) = (e.key + 1, e.value.$2, e.value.$3, e.value.$4, e.value.$5);
-                final maxMin = app.taskFocusStats(last7: _taskLast7).fold<int>(1, (a, x) => x.$3 > a ? x.$3 : a);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+        Builder(builder: (_) {
+          final taskStats = app.taskFocusStats(last7: _taskMode == 0, day: _taskMode == 2 ? _taskDay : null);
+          final maxMin = taskStats.fold<int>(1, (a, x) => x.$3 > a ? x.$3 : a);
+          return SoftCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('按任务的专注时长', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                    const Spacer(),
+                    if (_taskMode == 2)
                       Row(
                         children: [
-                          Text('$rank', style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w800, fontSize: 12)),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12), overflow: TextOverflow.ellipsis)),
-                          // 超过 1 分钟的到时超时（负计时）显示为 "25+1 分钟"
-                          Text('$minutes${otMin > 0 ? '+$otMin' : ''} 分钟', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12)),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.chevron_left, size: 18),
+                            onPressed: () => setState(() => _taskDay = _taskDay.subtract(const Duration(days: 1))),
+                          ),
+                          Text('${_taskDay.month}/${_taskDay.day}',
+                              style: TextStyle(fontSize: 12, color: AppColors.textGray, fontWeight: FontWeight.w600)),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.chevron_right, size: 18),
+                            onPressed: () {
+                              final next = _taskDay.add(const Duration(days: 1));
+                              if (!next.isAfter(DateTime.now())) setState(() => _taskDay = next);
+                            },
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: minutes / maxMin,
-                          minHeight: 6,
-                          backgroundColor: AppColors.slate100,
-                          color: AppColors.red,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _segment(['近 7 天', '全部', '单日'], _taskMode, (i) => setState(() => _taskMode = i)),
+                const SizedBox(height: 8),
+                ...taskStats.asMap().entries.map((e) {
+                  final (rank, name, minutes, count, otMin) = (e.key + 1, e.value.$2, e.value.$3, e.value.$4, e.value.$5);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text('$rank', style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w800, fontSize: 12)),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12), overflow: TextOverflow.ellipsis)),
+                            // 超过 1 分钟的到时超时（负计时）显示为 "25+1 分钟"
+                            Text('$minutes${otMin > 0 ? '+$otMin' : ''} 分钟', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 12)),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text('$count 个番茄', style: TextStyle(fontSize: 10, color: AppColors.textGray)),
-                    ],
-                  ),
-                );
-              }),
-              if (app.taskFocusStats(last7: _taskLast7).isEmpty)
-                Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text('暂无数据', style: TextStyle(color: AppColors.textGray, fontSize: 12))),
-            ],
-          ),
-        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: minutes / maxMin,
+                            minHeight: 6,
+                            backgroundColor: AppColors.slate100,
+                            color: AppColors.red,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('$count 个番茄', style: TextStyle(fontSize: 10, color: AppColors.textGray)),
+                      ],
+                    ),
+                  );
+                }),
+                if (taskStats.isEmpty)
+                  Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text('暂无数据', style: TextStyle(color: AppColors.textGray, fontSize: 12))),
+              ],
+            ),
+          );
+        }),
         // 最近的专注
         SoftCard(
           child: Column(

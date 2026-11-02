@@ -9,6 +9,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'screen_keep_on.dart';
+import 'system_notify.dart';
 import 'webdav.dart';
 import 'windows_flash.dart';
 
@@ -18,6 +20,8 @@ class AppState extends ChangeNotifier {
   static const _kRecords = 'records';
   static const _kSettings = 'settings';
   static const _kSession = 'session';
+  static const _kCycleDone = 'cycleDone';
+  static const _kLastChange = 'lastChangeTs';
 
   late final SharedPreferences _prefs;
   final List<Task> tasks = [];
@@ -25,11 +29,18 @@ class AppState extends ChangeNotifier {
   Settings settings = Settings();
   Session? session;
 
+  /// 自上次长休息以来已完成的番茄数（全局累计，跨任务/跨会话，重启不丢）
+  int cycleDone = 0;
+
+  /// 本地数据最后一次变更时间（用于启动自动同步判断谁更新）
+  int _lastChangeTs = 0;
+
   /// 最近一次 WebDAV 同步状态提示（null = 无）
   String? webdavStatus;
 
   Timer? _ticker;
   bool _syncing = false;
+  bool? _keepOnApplied; // 上次应用的屏幕常亮状态（避免重复调用通道）
   final AudioPlayer _bellPlayer = AudioPlayer();
   final AudioPlayer _tickPlayer = AudioPlayer();
   String? _bellPath;
@@ -54,25 +65,72 @@ class AppState extends ChangeNotifier {
     if (s != null && s.isNotEmpty) {
       session = Session.fromJson(jsonDecode(s));
     }
+    cycleDone = _prefs.getInt(_kCycleDone) ?? 0;
+    _lastChangeTs = _prefs.getInt(_kLastChange) ?? 0;
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     _onTick();
+    // 恢复未结束会话后应用屏幕常亮状态
+    _applyKeepScreenOn();
     // 系统深浅色切换时，若主题为"跟随系统"则刷新界面
     PlatformDispatcher.instance.onPlatformBrightnessChanged = () {
       if (settings.themeMode == 'system') notifyListeners();
     };
     notifyListeners();
+    // 安卓 13+ 通知权限（开关打开时才申请）
+    if (settings.notifyOn) {
+      unawaited(SystemNotify.requestPermission());
+    }
+    // 开了自动同步：启动第一时间与云端比对，避免多设备切换后数据滞后
+    if (settings.webdavOn && settings.webdavAutoSync && settings.webdavConfigured) {
+      unawaited(syncOnLaunch());
+    }
   }
 
   // ---------- 持久化 ----------
-  void _saveTasks() => _prefs.setString(_kTasks, jsonEncode(tasks.map((e) => e.toJson()).toList()));
-  void _saveRecords() => _prefs.setString(_kRecords, jsonEncode(records.map((e) => e.toJson()).toList()));
-  void _saveSettings() => _prefs.setString(_kSettings, jsonEncode(settings.toJson()));
+  /// 记录本地变更时间（启动自动同步时与云端 exportedAt 比较）
+  void _markChanged() {
+    _lastChangeTs = DateTime.now().millisecondsSinceEpoch;
+    _prefs.setInt(_kLastChange, _lastChangeTs);
+  }
+
+  void _saveTasks() {
+    _prefs.setString(_kTasks, jsonEncode(tasks.map((e) => e.toJson()).toList()));
+    _markChanged();
+  }
+
+  void _saveRecords() {
+    _prefs.setString(_kRecords, jsonEncode(records.map((e) => e.toJson()).toList()));
+    _markChanged();
+  }
+
+  void _saveSettings() {
+    _prefs.setString(_kSettings, jsonEncode(settings.toJson()));
+    _markChanged();
+  }
+
+  void _saveCycle() {
+    _prefs.setInt(_kCycleDone, cycleDone);
+    _markChanged();
+  }
+
+  /// 会话持久化：所有会话状态变化都会经过这里，顺带应用屏幕常亮
   void _saveSession() {
     if (session == null) {
       _prefs.remove(_kSession);
     } else {
       _prefs.setString(_kSession, jsonEncode(session!.toJson()));
     }
+    _markChanged();
+    _applyKeepScreenOn();
+  }
+
+  /// 屏幕常亮：仅安卓生效；会话进行中且开关打开时保持常亮
+  void _applyKeepScreenOn() {
+    if (!ScreenKeepOn.supported) return;
+    final should = settings.keepScreenOn && session != null;
+    if (_keepOnApplied == should) return;
+    _keepOnApplied = should;
+    ScreenKeepOn.set(should);
   }
 
   // ---------- 任务 ----------
@@ -132,6 +190,19 @@ class AppState extends ChangeNotifier {
   /// 到时后已超出的秒数（用于负数正计时显示）
   int get overtimeSec => math.max(0, elapsedSec - session!.durationSec);
 
+  /// 下一次休息是否应该是长休息：已完成番茄数达到设定周期
+  bool get nextBreakIsLong =>
+      cycleDone > 0 && settings.longBreakEvery > 0 && cycleDone % settings.longBreakEvery == 0;
+
+  /// 当前周期内已完成的番茄数（用于界面圆点），刚凑满或长休息中显示为满格
+  int get cycleProgress {
+    final every = settings.longBreakEvery <= 0 ? 4 : settings.longBreakEvery;
+    final s = session;
+    if (s != null && s.phase == SessionPhase.longBreak) return every;
+    if (cycleDone > 0 && cycleDone % every == 0) return every;
+    return cycleDone % every;
+  }
+
   void _onTick() {
     final s = session;
     if (s == null || s.isPaused) {
@@ -144,7 +215,15 @@ class AppState extends ChangeNotifier {
         s.ended = true;
         _recordPomodoro(s.durationSec);
         _playBell();
+        _vibrate();
         flashTaskbar(); // 最小化时任务栏图标闪红提醒
+        final breakMin = nextBreakIsLong ? settings.longBreakMin : settings.shortBreakMin;
+        _notifyDone(
+          title: '番茄时间到 · 该休息了',
+          body: s.taskName.isNotEmpty
+              ? '「${s.taskName}」完成第 ${s.pomodoroNo} 个番茄，休息 $breakMin 分钟吧'
+              : '本次专注完成，休息 $breakMin 分钟吧',
+        );
       } else if (s.phase == SessionPhase.shortBreak || s.phase == SessionPhase.longBreak) {
         // 休息结束：自动进入下一个番茄开始前界面
         s.phase = SessionPhase.preStart;
@@ -154,7 +233,12 @@ class AppState extends ChangeNotifier {
         s.durationSec = settings.focusMin * 60;
         s.ended = false;
         _playBell();
+        _vibrate();
         flashTaskbar();
+        _notifyDone(
+          title: '休息结束 · 开始下一个番茄',
+          body: '专注 ${settings.focusMin} 分钟，继续保持节奏',
+        );
       }
       _saveSession();
     } else if (s.phase == SessionPhase.focus && !s.ended) {
@@ -198,17 +282,29 @@ class AppState extends ChangeNotifier {
     _saveSession();
   }
 
-  /// 提前点“结束”并选择记录：按实际已专注时长记录
+  /// 提前点“结束”：
+  /// - 未到时 + 选择记录：记录一个番茄后按周期进入短/长休息，会话不中断
+  /// - 未到时 + 放弃：直接结束会话回主界面
+  /// - 已自然到时：补记超时后结束会话（到时提醒浮层里另有“开始休息”入口）
   void finishEarly({required bool record}) {
     final s = session;
     if (s == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
     if (s.phase == SessionPhase.focus) {
       if (s.ended) {
         // 已自然到时并记录过番茄：只补记超时（负计时），不重复记录
         _applyOvertime();
-      } else if (record) {
+        session = null;
+        _saveSession();
+        notifyListeners();
+        return;
+      }
+      if (record) {
+        // 未到时提前结束但记录：按实际已专注时长记录，然后按周期进入短/长休息
         final actual = math.min(elapsedSec, s.durationSec);
         _recordPomodoro(actual);
+        _enterBreak(s, now);
+        return;
       }
     }
     session = null;
@@ -216,20 +312,66 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 进入休息阶段（按全局番茄周期判断短/长休息），长休息开始后周期归零
+  void _enterBreak(Session s, int now) {
+    final isLong = nextBreakIsLong;
+    s.phase = isLong ? SessionPhase.longBreak : SessionPhase.shortBreak;
+    s.startTs = now;
+    s.pausedAccumMs = 0;
+    s.pauseStartTs = null;
+    s.durationSec = (isLong ? settings.longBreakMin : settings.shortBreakMin) * 60;
+    s.ended = false;
+    if (isLong) {
+      // 一个完整周期结束：计数归零，开启下一个周期
+      cycleDone = 0;
+      _saveCycle();
+    }
+    _saveSession();
+    notifyListeners();
+  }
+
+  /// 到时提醒浮层里的“丢弃该番茄”：用于计时一直开着、人其实早就离开（忘记关闭）的情况。
+  /// 本次番茄不计入统计：回滚自动写入的记录、任务累计与周期计数，然后结束会话回主界面。
+  void discardPomodoro() {
+    final s = session;
+    if (s == null) return;
+    if (s.phase == SessionPhase.focus && s.ended) {
+      _discardLastRecord(s);
+    }
+    session = null;
+    _saveSession();
+    notifyListeners();
+  }
+
+  /// 找到本次会话刚记录的那条番茄并整体回滚
+  void _discardLastRecord(Session s) {
+    final idx = records.lastIndexWhere((r) => r.startTs == s.startTs && r.taskId == s.taskId);
+    if (idx < 0) return;
+    final r = records.removeAt(idx);
+    if (s.taskId != null) {
+      final t = tasks.where((e) => e.id == s.taskId).firstOrNull;
+      if (t != null) {
+        t.completed = math.max(0, t.completed - 1);
+        t.focusSec = math.max(0, t.focusSec - r.focusSec);
+        _saveTasks();
+      }
+    }
+    cycleDone = math.max(0, cycleDone - 1);
+    s.cycleDone = cycleDone;
+    _saveCycle();
+    _saveRecords();
+    // 丢弃后立刻同步一次，避免云端还留着这条已作废的记录
+    if (settings.webdavOn && settings.webdavAutoSync && settings.webdavConfigured) {
+      uploadToCloud(auto: true);
+    }
+  }
+
   /// 到时提醒弹窗中点击“开始休息”
   void startBreak() {
     final s = session;
     if (s == null || s.phase != SessionPhase.focus) return;
     _applyOvertime(); // 补记等待期间的超时分钟
-    final isLong = s.cycleDone > 0 && s.cycleDone % settings.longBreakEvery == 0;
-    s.phase = isLong ? SessionPhase.longBreak : SessionPhase.shortBreak;
-    s.startTs = DateTime.now().millisecondsSinceEpoch;
-    s.pausedAccumMs = 0;
-    s.pauseStartTs = null;
-    s.durationSec = (isLong ? settings.longBreakMin : settings.shortBreakMin) * 60;
-    s.ended = false;
-    _saveSession();
-    notifyListeners();
+    _enterBreak(s, DateTime.now().millisecondsSinceEpoch);
   }
 
   void skipBreak() {
@@ -288,7 +430,9 @@ class AppState extends ChangeNotifier {
         _saveTasks();
       }
     }
-    s.cycleDone += 1;
+    cycleDone += 1;
+    s.cycleDone = cycleDone; // 兼容旧会话字段（仅用于展示/导出）
+    _saveCycle();
     _saveRecords();
     // 自动同步：完成一个番茄后把备份上传到 WebDAV
     if (settings.webdavOn && settings.webdavAutoSync && settings.webdavConfigured) {
@@ -314,6 +458,7 @@ class AppState extends ChangeNotifier {
   void updateSettings(Settings s) {
     settings = s;
     _saveSettings();
+    _applyKeepScreenOn();
     notifyListeners();
   }
 
@@ -327,6 +472,40 @@ class AppState extends ChangeNotifier {
   void toggleSound() {
     settings.soundOn = !settings.soundOn;
     _saveSettings();
+    notifyListeners();
+  }
+
+  /// 防烧屏模式开关（专注设置弹窗）
+  void toggleBurnInProtect() {
+    settings.burnInProtectOn = !settings.burnInProtectOn;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  /// 屏幕常亮开关（仅安卓设置页可见）
+  void toggleKeepScreenOn() {
+    settings.keepScreenOn = !settings.keepScreenOn;
+    _saveSettings();
+    _applyKeepScreenOn();
+    notifyListeners();
+  }
+
+  /// 到时震动提醒开关（仅安卓生效/可见）
+  void toggleVibrate() {
+    settings.vibrateOn = !settings.vibrateOn;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  /// 到时系统通知开关（安卓通知栏 / Windows 托盘气泡）
+  void toggleNotify() {
+    settings.notifyOn = !settings.notifyOn;
+    _saveSettings();
+    if (settings.notifyOn) {
+      unawaited(SystemNotify.requestPermission());
+      // 打开时发一条示例，顺便确认通知权限是否已授予
+      _notifyDone(title: '通知已开启', body: '番茄到时会在通知栏提醒你');
+    }
     notifyListeners();
   }
 
@@ -354,12 +533,15 @@ class AppState extends ChangeNotifier {
     settings.webdavOn = !settings.webdavOn;
     _saveSettings();
     notifyListeners();
+    if (settings.webdavOn && settings.webdavAutoSync) unawaited(syncOnLaunch());
   }
 
   void toggleWebdavAutoSync() {
     settings.webdavAutoSync = !settings.webdavAutoSync;
     _saveSettings();
     notifyListeners();
+    // 刚打开自动同步就先对齐一次，不用等下一个番茄
+    if (settings.webdavOn && settings.webdavAutoSync) unawaited(syncOnLaunch());
   }
 
   void saveWebdavConfig({required String url, required String user, required String pass, required String path}) {
@@ -376,6 +558,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 固定的云端备份文件名（每次覆盖，避免云端堆积大量带时间戳的文件）
+  static const String cloudBackupName = 'tomato_backup.json';
+  /// 旧版本遗留的带时间戳备份文件（tomato_backup_20261101_232002.json）保留最近几份作历史
+  static const int _keepOldBackups = 3;
+
   /// 上传备份到云端（auto=true 表示自动同步触发，静默失败仅记状态）
   Future<bool> uploadToCloud({bool auto = false}) async {
     if (_syncing) return false;
@@ -387,11 +574,17 @@ class AppState extends ChangeNotifier {
     _syncing = true;
     if (!auto) _setWebdavStatus('正在上传备份…');
     try {
-      final now = DateTime.now();
-      final name =
-          'tomato_backup_${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}.json';
-      await client.upload(name, exportJson());
-      _setWebdavStatus('已上传备份 $name');
+      await client.upload(cloudBackupName, exportJson());
+      _setWebdavStatus('已同步到云端 $cloudBackupName');
+      // 顺手清理旧版带时间戳的备份文件，只保留最近几份作历史（失败不影响本次同步）
+      try {
+        final old = (await client.listBackups())
+            .where((n) => n.startsWith('tomato_backup_') && n.endsWith('.json'))
+            .toList();
+        for (final n in old.skip(_keepOldBackups)) {
+          await client.delete(n);
+        }
+      } catch (_) {}
       return true;
     } on WebDavException catch (e) {
       _setWebdavStatus(auto ? '自动同步失败：${e.message}' : e.message);
@@ -415,13 +608,19 @@ class AppState extends ChangeNotifier {
     _setWebdavStatus('正在从云端恢复…');
     try {
       final list = await client.listBackups();
-      if (list.isEmpty) {
+      String? target;
+      if (list.contains(cloudBackupName)) {
+        target = cloudBackupName; // 固定文件优先（当前数据只有这一份）
+      } else if (list.isNotEmpty) {
+        target = list.first; // 兼容旧版带时间戳的备份
+      }
+      if (target == null) {
         _setWebdavStatus('云端还没有备份文件');
         return false;
       }
-      final raw = await client.download(list.first);
+      final raw = await client.download(target);
       final ok = importJson(raw);
-      _setWebdavStatus(ok ? '已恢复云端备份 ${list.first}' : '云端备份文件格式不正确');
+      _setWebdavStatus(ok ? '已恢复云端备份 $target' : '云端备份文件格式不正确');
       return ok;
     } on WebDavException catch (e) {
       _setWebdavStatus(e.message);
@@ -440,6 +639,56 @@ class AppState extends ChangeNotifier {
       throw const WebDavException('请填写服务器 URL 和账号');
     }
     await client.testConnection();
+  }
+
+  /// 启动时自动同步（多设备切换场景）：
+  /// 拉取云端备份并比对 exportedAt 与本地最后变更时间——
+  /// 云端更新则恢复云端数据，本地更新则把本地数据推上去。
+  Future<void> syncOnLaunch() async {
+    if (_syncing) return;
+    if (!settings.webdavOn || !settings.webdavAutoSync || !settings.webdavConfigured) return;
+    final client = _webdavClient();
+    if (client == null) return;
+    _syncing = true;
+    try {
+      final list = await client.listBackups();
+      String? target;
+      if (list.contains(cloudBackupName)) {
+        target = cloudBackupName;
+      } else if (list.isNotEmpty) {
+        target = list.first;
+      }
+      if (target == null) {
+        _syncing = false;
+        await uploadToCloud(auto: true);
+        return;
+      }
+      final raw = await client.download(target);
+      final remoteTs = _exportedAtOf(raw);
+      if (remoteTs > 0 && remoteTs > _lastChangeTs + 2000) {
+        final ok = importJson(raw);
+        _setWebdavStatus(ok ? '启动同步：已拉取云端最新数据' : '启动同步：云端备份格式不正确');
+      } else {
+        // 本地不比云端旧（或云端时间不可读）：以本地为准推上去
+        _syncing = false;
+        await uploadToCloud(auto: true);
+        return;
+      }
+    } catch (e) {
+      _setWebdavStatus('启动同步失败：$e');
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  int _exportedAtOf(String raw) {
+    try {
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final t = DateTime.tryParse((j['exportedAt'] as String?) ?? '');
+      return t?.millisecondsSinceEpoch ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   // ---------- 统计 ----------
@@ -495,13 +744,20 @@ class AppState extends ChangeNotifier {
     return buckets;
   }
 
-  /// 按任务的专注时长（last7=true 时只统计近 7 天）
+  /// 按任务的专注时长
+  /// - day != null：只统计该单日
+  /// - 否则 last7=true 只统计近 7 天，false 统计全部
   /// 返回 (任务, 名称, 专注分钟, 番茄数, 超时分钟)——超时分钟来自到时后的负计时
-  List<(Task?, String, int, int, int)> taskFocusStats({required bool last7}) {
+  List<(Task?, String, int, int, int)> taskFocusStats({required bool last7, DateTime? day}) {
     final since = DateTime.now().subtract(const Duration(days: 7)).millisecondsSinceEpoch;
+    final dayKey = day == null ? null : _dayOf(day.millisecondsSinceEpoch);
     final byName = <String, (int, int, int, String?)>{}; // name -> (sec, count, overtimeSec, taskId)
     for (final r in records) {
-      if (last7 && r.startTs < since) continue;
+      if (dayKey != null) {
+        if (_dayOf(r.startTs) != dayKey) continue;
+      } else if (last7 && r.startTs < since) {
+        continue;
+      }
       final cur = byName[r.taskName] ?? (0, 0, 0, r.taskId);
       byName[r.taskName] = (cur.$1 + r.focusSec, cur.$2 + 1, cur.$3 + r.overtimeSec, r.taskId);
     }
@@ -527,6 +783,8 @@ class AppState extends ChangeNotifier {
         'tasks': tasks.map((e) => e.toJson()).toList(),
         'records': records.map((e) => e.toJson()).toList(),
         'session': session?.toJson(),
+        'cycleDone': cycleDone,
+        'lastChangeTs': _lastChangeTs,
       });
 
   bool importJson(String raw) {
@@ -541,10 +799,22 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll((j['records'] as List).map((e) => FocusRecord.fromJson(e)));
       session = j['session'] == null ? null : Session.fromJson(j['session'] as Map<String, dynamic>);
+      // 周期计数：新版备份直接读取；旧备份回退到会话里的 cycleDone
+      final sessionJson = j['session'] as Map<String, dynamic>?;
+      cycleDone = (j['cycleDone'] as num?)?.toInt() ??
+          (sessionJson?['cycleDone'] as num?)?.toInt() ??
+          0;
       _saveTasks();
       _saveRecords();
       _saveSettings();
+      _saveCycle();
       _saveSession();
+      // 以备份里的"最后变更时间"为准，避免刚恢复就被判成本地更新
+      final remoteChange = (j['lastChangeTs'] as num?)?.toInt();
+      if (remoteChange != null) {
+        _lastChangeTs = remoteChange;
+        _prefs.setInt(_kLastChange, _lastChangeTs);
+      }
       notifyListeners();
       return true;
     } catch (_) {
@@ -565,6 +835,18 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- 提示音 ----------
+  /// 到时系统通知（安卓通知栏 / Windows 托盘气泡）
+  void _notifyDone({required String title, required String body}) {
+    if (!settings.notifyOn) return;
+    unawaited(SystemNotify.show(title: title, body: body));
+  }
+
+  /// 到时震动提醒（仅安卓，震动三短一长节奏由原生层定义）
+  void _vibrate() {
+    if (!settings.vibrateOn) return;
+    ScreenKeepOn.vibrate();
+  }
+
   /// 到时铃声（运行时生成 WAV"叮—咚"）
   Future<void> _playBell() async {
     if (!settings.soundOn) return;

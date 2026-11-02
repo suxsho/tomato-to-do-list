@@ -5,7 +5,6 @@ import '../app_state.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/tomato_view.dart';
-import 'settings_dialog.dart';
 import 'timer_flow_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -145,24 +144,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        // 规则说明 + 设置
+        // 规则说明（番茄钟设置入口已移到"设置"页）
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 2),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text('番茄钟 ${app.settings.focusMin} / ${app.settings.shortBreakMin} / ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
-                    style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600)),
-              ),
-              GestureDetector(
-                onTap: () => showSettingsDialog(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(color: AppColors.redLight, borderRadius: BorderRadius.circular(12)),
-                  child: const Text('设置', style: TextStyle(color: AppColors.red, fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
+          child: Text(
+            '番茄钟 ${app.settings.focusMin} / ${app.settings.shortBreakMin} / ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息（在设置中修改）',
+            style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ),
         // 进行中的番茄入口

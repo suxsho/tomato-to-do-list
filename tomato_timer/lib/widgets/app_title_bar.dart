@@ -1,14 +1,18 @@
+import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme.dart';
 
 /// 自定义标题栏：拖拽移动 + 双击最大化 + 置顶胶囊 Toggle + 窗口按钮
-/// 主界面与计时页共用
+/// 主界面与计时页共用；仅 Windows 显示，安卓上返回空（无窗口概念）
 class AppTitleBar extends StatefulWidget {
   const AppTitleBar({super.key});
+
+  static final bool _show = !kIsWeb && Platform.isWindows;
 
   @override
   State<AppTitleBar> createState() => _AppTitleBarState();
@@ -21,13 +25,14 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
   @override
   void initState() {
     super.initState();
+    if (!AppTitleBar._show) return;
     windowManager.addListener(this);
     _refreshMaximized();
   }
 
   @override
   void dispose() {
-    windowManager.removeListener(this);
+    if (AppTitleBar._show) windowManager.removeListener(this);
     super.dispose();
   }
 
@@ -57,6 +62,15 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    // 安卓 / 移动端：没有窗口概念，不渲染标题栏，
+    // 但保留状态栏高度的占位（SafeArea），避免内容顶到状态栏
+    if (!AppTitleBar._show) {
+      return SafeArea(
+        top: true,
+        bottom: false,
+        child: const SizedBox(height: 0),
+      );
+    }
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),

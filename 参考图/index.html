@@ -68,7 +68,6 @@
       transition: top 0.6s ease-in-out, background-color 0.3s ease;
     }
 
-    /* 暂停状态下的波纹特效：静止 + 降饱和度 */
     .wave-container.is-paused .wave,
     .wave-container.is-paused .wave-back {
       animation-play-state: paused;
@@ -93,7 +92,6 @@
       scrollbar-width: none;
     }
 
-    /* 暂停状态闪烁动画 */
     @keyframes pulse-light {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
@@ -105,13 +103,13 @@
 </head>
 <body class="flex justify-center items-center min-h-screen p-0 sm:p-4">
 
-  <!-- 主容器 (桌面/移动端模拟壳) -->
+  <!-- 主容器 (桌面/移动端窗口) -->
   <div class="w-full max-w-[414px] h-[100vh] sm:h-[844px] bg-[#f6f8fa] sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden relative border-0 sm:border-[8px] border-slate-800">
     
-    <!-- 桌面窗口栏 -->
+    <!-- 桌面窗口控制栏 -->
     <div class="h-10 px-4 bg-white/70 backdrop-blur-md flex justify-between items-center z-20 border-b border-slate-100">
       <div class="flex items-center gap-2">
-        <span class="text-sm font-black tracking-tight text-slate-800">番茄专注清单</span>
+        <span class="text-sm font-black tracking-tight text-slate-800">番茄任务清单</span>
       </div>
       <div class="flex items-center gap-3">
         <button id="btn-pin-toggle" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-slate-400 bg-slate-100 text-[11px] font-bold transition hover:bg-slate-200 active:scale-95">
@@ -126,7 +124,7 @@
       </div>
     </div>
 
-    <!-- 视图主区域 -->
+    <!-- 视图渲染区域 -->
     <div id="app-content" class="flex-1 overflow-y-auto no-scrollbar relative px-4 pt-3 pb-24">
       
       <!-- ================= 页面 1: 任务主页 ================= -->
@@ -188,25 +186,22 @@
 
       <!-- ================= 页面 2: 专注/休息 计时器页面 ================= -->
       <div id="page-timer" class="hidden flex-col items-center justify-between min-h-[560px] py-2">
-        
-        <!-- 顶部导航指示 -->
         <div class="flex items-center justify-between w-full">
           <button id="btn-timer-back" class="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-600">
             <i class="fa-solid fa-chevron-left text-xs"></i>
           </button>
           
-          <!-- 关键改进 1：顶部状态胶囊 -->
           <div id="timer-mode-badge" class="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold bg-red-100 text-[#ff5a5f] transition-all">
             <span id="badge-dot" class="w-2 h-2 rounded-full bg-[#ff5a5f]"></span>
             <span id="badge-text">专注中</span>
           </div>
 
-          <button class="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-600">
-            <i class="fa-solid fa-volume-high text-xs"></i>
+          <!-- 修改后的专注设置图标按钮 -->
+          <button id="btn-open-focus-settings" class="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-600 hover:bg-slate-50 transition active:scale-95" title="专注设置">
+            <i class="fa-solid fa-sliders text-xs text-slate-600"></i>
           </button>
         </div>
 
-        <!-- 关键改进 2：中心水波纹 & 数字视觉 -->
         <div class="flex flex-col items-center my-4">
           <div id="wave-box" class="wave-container shadow-inner">
             <div id="wave-back-el" class="wave-back" style="top: 50%;"></div>
@@ -221,7 +216,6 @@
           </p>
         </div>
 
-        <!-- 关键改进 3：控制卡片与暂停恢复按钮 -->
         <div class="w-full space-y-3">
           <div class="k-card p-3 bg-white/80">
             <input id="timer-note-input" type="text" placeholder="本次专注备注 (例如: 完成方案第一章)" class="w-full text-xs font-medium text-slate-700 bg-transparent outline-none placeholder-slate-400">
@@ -234,6 +228,123 @@
             <button id="btn-timer-toggle" class="flex-[2] py-3 rounded-2xl k-btn-primary font-bold text-xs shadow-md">
               暂停
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 页面 3: 统计视图 ================= -->
+      <div id="page-stats" class="hidden space-y-4">
+        <div class="px-1">
+          <h2 class="text-lg font-extrabold text-slate-800">专注统计</h2>
+          <p class="text-xs text-slate-400 font-medium">完成的番茄才会计入，放弃的不算</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div class="k-card p-3.5 text-center">
+            <span class="text-[10px] font-bold text-slate-400">今日番茄</span>
+            <div class="text-xl font-extrabold text-[#ff5a5f] mt-0.5">0<span class="text-xs text-slate-500 font-normal">个</span></div>
+          </div>
+          <div class="k-card p-3.5 text-center">
+            <span class="text-[10px] font-bold text-slate-400">今日专注</span>
+            <div class="text-xl font-extrabold text-slate-800 mt-0.5">0<span class="text-xs text-slate-500 font-normal">分</span></div>
+          </div>
+          <div class="k-card p-3.5 text-center">
+            <span class="text-[10px] font-bold text-slate-400">连续天数</span>
+            <div class="text-xl font-extrabold text-amber-500 mt-0.5">0<span class="text-xs text-slate-500 font-normal">天</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 页面 4: 我的/设置 视图 ================= -->
+      <div id="page-mine" class="hidden space-y-4">
+        <div class="k-card p-5 bg-gradient-to-r from-rose-500 to-[#ff5a5f] text-white">
+          <h2 class="text-base font-extrabold">番茄任务清单</h2>
+          <p class="text-xs opacity-90 mt-1">任务配番茄，专注一个接一个</p>
+          <span class="inline-block mt-3 px-2.5 py-0.5 rounded-full bg-white/20 text-[10px] font-semibold">
+            版本 0.1.0 · 纯离线 · 零权限
+          </span>
+        </div>
+
+        <div class="k-card p-2 divide-y divide-slate-100">
+          <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-volume-high text-rose-500 text-xs"></i>
+              <div>
+                <div class="text-xs font-bold text-slate-700">提示音</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">专注时滴答声 · 结束时响铃提醒</div>
+              </div>
+            </div>
+            <input type="checkbox" checked class="accent-[#ff5a5f] w-4 h-4 cursor-pointer">
+          </div>
+        </div>
+
+        <div class="k-card p-2 divide-y divide-slate-100">
+          <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-arrow-up-from-bracket text-slate-400 text-xs"></i>
+              <div>
+                <div class="text-xs font-bold text-slate-700">备份到文件</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">导出一个 .json 备份文件</div>
+              </div>
+            </div>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-300"></i>
+          </div>
+          <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-arrow-down-to-bracket text-slate-400 text-xs"></i>
+              <div>
+                <div class="text-xs font-bold text-slate-700">从备份恢复</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">选择之前保存的备份文件</div>
+              </div>
+            </div>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-300"></i>
+          </div>
+          <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-trash-can text-rose-400 text-xs"></i>
+              <div>
+                <div class="text-xs font-bold text-rose-500">清除历史记录</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">删除全部番茄专注记录</div>
+              </div>
+            </div>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-300"></i>
+          </div>
+        </div>
+
+        <div class="k-card p-2 divide-y divide-slate-100">
+          <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-cloud text-sky-500 text-xs"></i>
+              <span class="text-xs font-bold text-slate-700">WebDav同步</span>
+            </div>
+            <input type="checkbox" checked class="accent-[#ff5a5f] w-4 h-4 cursor-pointer">
+          </div>
+          <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-arrows-rotate text-slate-400 text-xs"></i>
+              <div>
+                <div class="text-xs font-bold text-slate-700">自动同步记录</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">允许自动同步记录</div>
+              </div>
+            </div>
+            <input type="checkbox" checked class="accent-[#ff5a5f] w-4 h-4 cursor-pointer">
+          </div>
+          <div id="btn-open-webdav" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-sliders text-slate-400 text-xs"></i>
+              <span class="text-xs font-bold text-slate-700">WebDav配置</span>
+            </div>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-300"></i>
+          </div>
+        </div>
+
+        <div class="k-card p-2">
+          <div id="btn-open-about" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 rounded-xl transition">
+            <div class="flex items-center gap-3">
+              <i class="fa-solid fa-circle-info text-slate-400 text-xs"></i>
+              <span class="text-xs font-bold text-slate-700">关于番茄任务清单与作者</span>
+            </div>
+            <i class="fa-solid fa-chevron-right text-xs text-slate-300"></i>
           </div>
         </div>
       </div>
@@ -256,14 +367,14 @@
       </button>
     </div>
 
-    <!-- 全局弹窗 -->
+    <!-- 弹窗 1: 计时结束确认弹窗 -->
     <div id="custom-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
-      <div class="k-card w-full max-w-[320px] p-6 text-center shadow-2xl bg-gradient-to-b from-white to-[#fff8f8] border-white/80 transform transition-all scale-100">
+      <div class="k-card w-full max-w-[320px] p-6 text-center shadow-2xl bg-gradient-to-b from-white to-[#fff8f8] border-white/80">
         <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-rose-50 flex items-center justify-center text-2xl shadow-inner">
           🍅
         </div>
-        <h3 id="modal-title" class="text-base font-extrabold text-slate-800 tracking-tight">结束本次番茄？</h3>
-        <p id="modal-desc" class="text-xs text-slate-500 mt-2 leading-relaxed px-2">
+        <h3 class="text-base font-extrabold text-slate-800 tracking-tight">结束本次番茄？</h3>
+        <p class="text-xs text-slate-500 mt-2 leading-relaxed px-2">
           可以选择记录本次番茄（按实际已专注时长），或放弃本次。
         </p>
         <div class="flex flex-col gap-2 mt-6">
@@ -277,11 +388,113 @@
       </div>
     </div>
 
+    <!-- 弹窗 2: 新增“专注设置”弹窗 (按照用户示意图设计) -->
+    <div id="focus-settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md transition-all">
+      <div class="k-card w-full max-w-[280px] p-6 text-center shadow-2xl bg-white border-white/80 relative space-y-4">
+        <h3 class="text-base font-extrabold text-slate-800 border-b border-slate-100 pb-2">专注设置</h3>
+
+        <div class="space-y-2.5 pt-1">
+          <!-- 声音选项按键 -->
+          <button id="toggle-focus-sound" class="w-full py-3 rounded-xl bg-[#1d5c7a] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+            <span>声音: </span><span id="sound-status-text">开</span>
+          </button>
+
+          <!-- 防烧屏选项按键 -->
+          <button id="toggle-focus-burn" class="w-full py-3 rounded-xl bg-[#1d5c7a] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+            <span>防烧屏: </span><span id="burn-status-text">开</span>
+          </button>
+        </div>
+
+        <!-- 确定按钮 -->
+        <button id="btn-close-focus-settings" class="w-full py-3 rounded-xl bg-[#1d5c7a] text-white font-bold text-xs shadow-md active:scale-95 transition mt-2">
+          确定
+        </button>
+      </div>
+    </div>
+
+    <!-- 弹窗 3: WebDav 配置弹窗 -->
+    <div id="webdav-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
+      <div class="k-card w-full max-w-[340px] p-5 shadow-2xl bg-white border-white/80 relative">
+        <button id="btn-close-webdav" class="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition">
+          <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-8 h-8 rounded-xl bg-sky-100 text-sky-500 flex items-center justify-center text-sm font-bold">
+            <i class="fa-solid fa-cloud"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-extrabold text-slate-800">WebDav 配置</h3>
+            <p class="text-[10px] text-slate-400">设置用于端到端同步的服务器参数</p>
+          </div>
+        </div>
+
+        <div class="space-y-2.5">
+          <div>
+            <label class="text-[10px] font-bold text-slate-500">服务器 URL</label>
+            <input type="text" placeholder="https://example.com/webdav/" class="w-full mt-1 px-3 py-2 text-xs bg-slate-50 rounded-xl outline-none border border-slate-200/60 focus:border-sky-400 font-medium">
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-slate-500">账号 / 用户名</label>
+            <input type="text" placeholder="输入 WebDAV 账号" class="w-full mt-1 px-3 py-2 text-xs bg-slate-50 rounded-xl outline-none border border-slate-200/60 focus:border-sky-400 font-medium">
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-slate-500">密码 / 应用秘钥</label>
+            <input type="password" placeholder="••••••••" class="w-full mt-1 px-3 py-2 text-xs bg-slate-50 rounded-xl outline-none border border-slate-200/60 focus:border-sky-400 font-medium">
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-slate-500">同步文件夹路径</label>
+            <input type="text" value="/PomodoroData/" class="w-full mt-1 px-3 py-2 text-xs bg-slate-50 rounded-xl outline-none border border-slate-200/60 focus:border-sky-400 font-medium text-slate-600">
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-5">
+          <button id="btn-test-webdav" class="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-200 active:scale-95 transition">
+            测试连接
+          </button>
+          <button id="btn-save-webdav" class="flex-1 py-2.5 rounded-xl bg-sky-500 text-white font-bold text-xs shadow-md shadow-sky-200 active:scale-95 transition">
+            保存配置
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 4: 关于作者与软件弹窗 -->
+    <div id="about-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
+      <div class="k-card w-full max-w-[320px] p-6 text-center shadow-2xl bg-gradient-to-b from-white via-white to-rose-50/30 border-white/80 relative">
+        <button id="btn-close-about" class="absolute top-4 right-4 w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition">
+          <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+
+        <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-rose-500 text-white flex items-center justify-center text-3xl shadow-lg shadow-rose-200">
+          🍅
+        </div>
+
+        <h3 class="text-base font-extrabold text-slate-800">番茄任务清单</h3>
+        <p class="text-[11px] font-semibold text-slate-400 mt-0.5">Minimal Focus Timer v0.1.0</p>
+        
+        <div class="my-4 p-3 bg-slate-50 rounded-2xl text-left space-y-2 border border-slate-100/80">
+          <div class="flex justify-between items-center text-xs">
+            <span class="font-medium text-slate-400">软件作者</span>
+            <span class="font-extrabold text-slate-800 bg-rose-100/60 text-[#ff5a5f] px-2 py-0.5 rounded-md">枫2</span>
+          </div>
+          <div class="text-[11px] text-slate-500 leading-relaxed pt-1 border-t border-slate-200/50">
+            任务配番茄，专注一个接一个。纯离线、零权限的极简效率工具。
+          </div>
+        </div>
+
+        <a href="https://space.bilibili.com/10600" target="_blank" class="w-full py-3 rounded-xl bg-[#00AEEC] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-sky-100 hover:opacity-95 active:scale-95 transition">
+          <i class="fa-brands fa-bilibili text-sm"></i>
+          <span>B站私信联系作者</span>
+        </a>
+      </div>
+    </div>
+
   </div>
 
   <script>
     let tasks = [
-      { id: 1, title: '休息测试', estimate: 1, completedTomatoes: 0, finished: false }
+      { id: 1, title: '检查番茄清单', estimate: 1, completedTomatoes: 0, finished: false }
     ];
     let isPinned = false;
     let timerState = {
@@ -293,7 +506,13 @@
       currentTask: null
     };
 
-    // 置顶 Toggle
+    // 专注设置状态
+    let focusSettings = {
+      sound: true,
+      burnProtect: true
+    };
+
+    // 置顶按钮逻辑
     const btnPin = document.getElementById('btn-pin-toggle');
     const pinText = document.getElementById('pin-text');
     btnPin.onclick = () => {
@@ -397,14 +616,35 @@
     function switchPage(pageName) {
       document.getElementById('page-tasks').classList.add('hidden');
       document.getElementById('page-timer').classList.add('hidden');
+      document.getElementById('page-stats').classList.add('hidden');
+      document.getElementById('page-mine').classList.add('hidden');
       document.getElementById('page-timer').classList.remove('flex');
 
-      if (pageName === 'tasks') document.getElementById('page-tasks').classList.remove('hidden');
+      ['nav-tasks', 'nav-stats', 'nav-mine'].forEach(id => {
+        document.getElementById(id).className = "flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600";
+      });
+
+      if (pageName === 'tasks') {
+        document.getElementById('page-tasks').classList.remove('hidden');
+        document.getElementById('nav-tasks').className = "flex flex-col items-center gap-1 text-[#ff5a5f]";
+      }
       if (pageName === 'timer') {
         document.getElementById('page-timer').classList.remove('hidden');
         document.getElementById('page-timer').classList.add('flex');
       }
+      if (pageName === 'stats') {
+        document.getElementById('page-stats').classList.remove('hidden');
+        document.getElementById('nav-stats').className = "flex flex-col items-center gap-1 text-[#ff5a5f]";
+      }
+      if (pageName === 'mine') {
+        document.getElementById('page-mine').classList.remove('hidden');
+        document.getElementById('nav-mine').className = "flex flex-col items-center gap-1 text-[#ff5a5f]";
+      }
     }
+
+    document.getElementById('nav-tasks').onclick = () => switchPage('tasks');
+    document.getElementById('nav-stats').onclick = () => switchPage('stats');
+    document.getElementById('nav-mine').onclick = () => switchPage('mine');
 
     function updateTimerUI() {
       const mins = Math.floor(timerState.timeLeft / 60).toString().padStart(2, '0');
@@ -415,7 +655,6 @@
       document.getElementById('wave-el').style.top = `${100 - progress}%`;
       document.getElementById('wave-back-el').style.top = `${95 - progress}%`;
 
-      // 视效核心逻辑：处理暂停 UI 状态转换
       const badge = document.getElementById('timer-mode-badge');
       const badgeDot = document.getElementById('badge-dot');
       const badgeText = document.getElementById('badge-text');
@@ -424,29 +663,21 @@
       const btnToggle = document.getElementById('btn-timer-toggle');
 
       if (timerState.isPaused) {
-        // 1. 顶部胶囊转换为暖黄 "已暂停" 状态
         badge.className = "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold bg-amber-100 text-amber-600 transition-all shadow-sm";
         badgeDot.className = "w-2 h-2 rounded-full bg-amber-500 pause-pulse";
         badgeText.innerText = "已暂停";
 
-        // 2. 波浪动画冻结 & 浅色化
         waveBox.classList.add('is-paused');
-
-        // 3. 时间文本柔和化
         timerDisplay.className = "text-4xl font-black text-slate-400 tracking-tight mt-5 pause-pulse";
 
-        // 4. 按钮样式更新为 "继续"
         btnToggle.innerText = "继续专注";
         btnToggle.className = "flex-[2] py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-200 transition active:scale-95";
-
       } else {
-        // 恢复专注状态
         badge.className = "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-extrabold bg-red-100 text-[#ff5a5f] transition-all";
         badgeDot.className = "w-2 h-2 rounded-full bg-[#ff5a5f]";
         badgeText.innerText = "专注中";
 
         waveBox.classList.remove('is-paused');
-
         timerDisplay.className = "text-4xl font-black text-slate-800 tracking-tight mt-5";
 
         btnToggle.innerText = "暂停";
@@ -469,39 +700,59 @@
       }, 1000);
     }
 
-    // 暂停/继续 按钮切换
     document.getElementById('btn-timer-toggle').onclick = () => {
       timerState.isPaused = !timerState.isPaused;
       updateTimerUI();
     };
 
-    // 弹窗管理
+    // 结束确认弹窗逻辑
     const modal = document.getElementById('custom-modal');
-    document.getElementById('btn-timer-stop').onclick = () => {
-      modal.classList.remove('hidden');
-    };
-
+    document.getElementById('btn-timer-stop').onclick = () => modal.classList.remove('hidden');
     document.getElementById('modal-btn-confirm').onclick = () => {
       modal.classList.add('hidden');
       clearInterval(timerState.timerId);
       timerState.isRunning = false;
-      if (timerState.currentTask) {
-        timerState.currentTask.completedTomatoes += 1;
-      }
+      if (timerState.currentTask) timerState.currentTask.completedTomatoes += 1;
       renderTasks();
       switchPage('tasks');
     };
-
     document.getElementById('modal-btn-cancel').onclick = () => {
       modal.classList.add('hidden');
       clearInterval(timerState.timerId);
       timerState.isRunning = false;
       switchPage('tasks');
     };
+    document.getElementById('btn-timer-back').onclick = () => modal.classList.remove('hidden');
 
-    document.getElementById('btn-timer-back').onclick = () => {
-      modal.classList.remove('hidden');
+    // 专注设置弹窗逻辑 (根据用户示意图)
+    const focusModal = document.getElementById('focus-settings-modal');
+    document.getElementById('btn-open-focus-settings').onclick = () => focusModal.classList.remove('hidden');
+    document.getElementById('btn-close-focus-settings').onclick = () => focusModal.classList.add('hidden');
+
+    document.getElementById('toggle-focus-sound').onclick = () => {
+      focusSettings.sound = !focusSettings.sound;
+      document.getElementById('sound-status-text').innerText = focusSettings.sound ? '开' : '关';
     };
+
+    document.getElementById('toggle-focus-burn').onclick = () => {
+      focusSettings.burnProtect = !focusSettings.burnProtect;
+      document.getElementById('burn-status-text').innerText = focusSettings.burnProtect ? '开' : '关';
+    };
+
+    // WebDAV 弹窗逻辑
+    const webdavModal = document.getElementById('webdav-modal');
+    document.getElementById('btn-open-webdav').onclick = () => webdavModal.classList.remove('hidden');
+    document.getElementById('btn-close-webdav').onclick = () => webdavModal.classList.add('hidden');
+    document.getElementById('btn-save-webdav').onclick = () => {
+      alert("WebDAV 配置已保存！");
+      webdavModal.classList.add('hidden');
+    };
+    document.getElementById('btn-test-webdav').onclick = () => alert("连接成功！");
+
+    // 关于弹窗逻辑
+    const aboutModal = document.getElementById('about-modal');
+    document.getElementById('btn-open-about').onclick = () => aboutModal.classList.remove('hidden');
+    document.getElementById('btn-close-about').onclick = () => aboutModal.classList.add('hidden');
 
     renderTasks();
   </script>

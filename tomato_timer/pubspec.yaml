@@ -1,7 +1,7 @@
 name: tomato_timer
 description: 番茄任务清单 - 单机离线番茄钟
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.13.7
@@ -23,6 +23,16 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# 安卓桌面图标生成：dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/Flat_minimal_app_icon_of_a_cut_2026-11-01T12-47-03.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/Flat_minimal_app_icon_of_a_cut_2026-11-01T12-47-03.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
