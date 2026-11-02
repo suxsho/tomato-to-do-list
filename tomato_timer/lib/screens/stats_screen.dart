@@ -38,9 +38,12 @@ class _StatsScreenState extends State<StatsScreen> {
     final app = context.watch<AppState>();
     final recent = app.records.reversed.take(30).toList();
 
-    return ListView(
-      padding: const EdgeInsets.only(top: 8, bottom: 24),
-      children: [
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1180),
+        child: ListView(
+          padding: const EdgeInsets.only(top: 8, bottom: 24),
+          children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 2),
           child: Column(
@@ -214,7 +217,9 @@ class _StatsScreenState extends State<StatsScreen> {
             ],
           ),
         ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 

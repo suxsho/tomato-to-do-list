@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_state.dart';
@@ -25,10 +27,23 @@ Future<void> main() async {
   // 自定义窗口标题栏仅在 Windows 上初始化（安卓上 window_manager 不可用）
   if (!kIsWeb && Platform.isWindows) {
     await windowManager.ensureInitialized();
+    // 默认横屏打开；小屏幕上按可用工作区收一点，别顶出屏幕
+    var winSize = const Size(1120, 720);
+    try {
+      final display = await screenRetriever.getPrimaryDisplay();
+      final area = display.visibleSize ?? display.size; // 物理像素
+      final dpr = PlatformDispatcher.instance.views.first.devicePixelRatio;
+      final logical = Size(area.width / dpr, area.height / dpr);
+      winSize = Size(
+        math.min(1120, logical.width * 0.92),
+        math.min(720, logical.height * 0.92),
+      );
+    } catch (_) {}
     await windowManager.waitUntilReadyToShow(
       WindowOptions(
-        size: const Size(460, 720),
-        minimumSize: const Size(360, 560),
+        // PC 默认横屏打开（左侧导航 + 左右分栏），不再像手机竖屏窗口
+        size: winSize,
+        minimumSize: const Size(380, 520),
         center: true,
         title: '番茄任务清单',
         titleBarStyle: TitleBarStyle.hidden, // 自定义标题栏
@@ -71,6 +86,11 @@ class TomatoApp extends StatelessWidget {
       darkTheme: _buildTheme(Brightness.dark),
       themeMode: mode,
       home: const MainShell(),
+      // 全局字体缩放：设置页「字体大小」在此生效（小 0.9 / 标准 1.0 / 大 1.15）
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(app.settings.fontScale)),
+        child: child!,
+      ),
     );
   }
 

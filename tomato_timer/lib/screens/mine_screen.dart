@@ -258,7 +258,7 @@ class MineScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text('番茄任务清单', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
               const SizedBox(height: 2),
-              Text('Minimal Focus Timer v0.2.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+              Text('Minimal Focus Timer v0.3.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -324,9 +324,12 @@ class MineScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 820),
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
         // 顶部渐变卡
         Container(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
@@ -346,7 +349,7 @@ class MineScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                child: const Text('版本 0.2.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: const Text('版本 0.3.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -361,6 +364,30 @@ class MineScreen extends StatelessWidget {
             '专注 ${app.settings.focusMin} / 短休 ${app.settings.shortBreakMin} / 长休 ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
             () => showSettingsDialog(context),
             iconColor: AppColors.red,
+          ),
+        ),
+        // 外观与字体
+        SoftCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('外观', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+              const SizedBox(height: 8),
+              _seg(
+                opts: const [('system', '跟随系统'), ('light', '白天'), ('dark', '夜间')],
+                current: app.settings.themeMode,
+                onPick: (v) => app.setThemeMode(v),
+              ),
+              const SizedBox(height: 14),
+              Text('字体大小', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+              const SizedBox(height: 8),
+              _seg(
+                opts: const [('0.9', '小'), ('1.0', '标准'), ('1.15', '大')],
+                current: _fontKey(app.settings.fontScale),
+                onPick: (v) => app.setFontScale(double.parse(v)),
+              ),
+            ],
           ),
         ),
         // 提示音 + 音量
@@ -492,7 +519,38 @@ class MineScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: _row(context, Icons.info_outline, '关于番茄任务清单与作者', '版本信息与联系方式', () => _showAbout(context)),
         ),
-      ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 将字体缩放值映射到三档 key（小 0.9 / 标准 1.0 / 大 1.15）
+  String _fontKey(double s) => s < 0.95 ? '0.9' : (s > 1.05 ? '1.15' : '1.0');
+
+  /// 通用分段选择器（外观主题 / 字体大小共用）
+  Widget _seg({
+    required List<(String, String)> opts,
+    required String current,
+    required ValueChanged<String> onPick,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<String>(
+        segments: opts.map((o) => ButtonSegment(value: o.$1, label: Text(o.$2))).toList(),
+        selected: {current},
+        showSelectedIcon: false,
+        style: SegmentedButton.styleFrom(
+          selectedBackgroundColor: AppColors.red,
+          selectedForegroundColor: Colors.white,
+          backgroundColor: AppColors.slate100,
+          foregroundColor: AppColors.textMid,
+          side: BorderSide(color: AppColors.cardBorder),
+          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          visualDensity: VisualDensity.compact,
+        ),
+        onSelectionChanged: (sel) => onPick(sel.first),
+      ),
     );
   }
 

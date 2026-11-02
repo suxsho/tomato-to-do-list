@@ -7,6 +7,7 @@ class Task {
   int focusSec; // 该任务累计专注秒数
   bool done;
   int createdAt;
+  int pomoMin; // 每个番茄的分钟数：0 = 跟随全局默认（Settings.focusMin）
 
   Task({
     required this.id,
@@ -16,6 +17,7 @@ class Task {
     this.focusSec = 0,
     this.done = false,
     required this.createdAt,
+    this.pomoMin = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -26,6 +28,7 @@ class Task {
         'focusSec': focusSec,
         'done': done,
         'createdAt': createdAt,
+        'pomoMin': pomoMin,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -36,6 +39,7 @@ class Task {
         focusSec: (j['focusSec'] as num?)?.toInt() ?? 0,
         done: j['done'] == true,
         createdAt: (j['createdAt'] as num).toInt(),
+        pomoMin: (j['pomoMin'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -96,6 +100,7 @@ class Settings {
   bool keepScreenOn; // 专注时屏幕常亮（仅安卓生效/可见）
   bool vibrateOn; // 到时震动提醒（仅安卓生效/可见）
   bool notifyOn; // 计时到点发系统通知（安卓通知栏 / Windows 托盘气泡）
+  double fontScale; // 全局字体缩放：0.9=小 / 1.0=标准 / 1.15=大
 
   // WebDAV 云同步
   bool webdavOn; // WebDAV 同步总开关
@@ -117,6 +122,7 @@ class Settings {
     this.keepScreenOn = true,
     this.vibrateOn = true,
     this.notifyOn = true,
+    this.fontScale = 1.0,
     this.webdavOn = false,
     this.webdavAutoSync = false,
     this.webdavUrl = '',
@@ -139,6 +145,7 @@ class Settings {
         'keepScreenOn': keepScreenOn,
         'vibrateOn': vibrateOn,
         'notifyOn': notifyOn,
+        'fontScale': fontScale,
         'webdavOn': webdavOn,
         'webdavAutoSync': webdavAutoSync,
         'webdavUrl': webdavUrl,
@@ -159,6 +166,7 @@ class Settings {
         keepScreenOn: j['keepScreenOn'] != false,
         vibrateOn: j['vibrateOn'] != false,
         notifyOn: j['notifyOn'] != false,
+        fontScale: (j['fontScale'] as num?)?.toDouble() ?? 1.0,
         webdavOn: j['webdavOn'] == true,
         webdavAutoSync: j['webdavAutoSync'] == true,
         webdavUrl: j['webdavUrl'] as String? ?? '',

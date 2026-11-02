@@ -134,12 +134,13 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- 任务 ----------
-  void addTask(String name, int estimated) {
+  void addTask(String name, int estimated, [int pomoMin = 0]) {
     tasks.add(Task(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: name,
       estimated: estimated,
       createdAt: DateTime.now().millisecondsSinceEpoch,
+      pomoMin: pomoMin,
     ));
     _saveTasks();
     notifyListeners();
@@ -147,6 +148,18 @@ class AppState extends ChangeNotifier {
 
   void deleteTask(String id) {
     tasks.removeWhere((t) => t.id == id);
+    _saveTasks();
+    notifyListeners();
+  }
+
+  /// 编辑任务：更新名称、预估番茄数与每个番茄的分钟数（0 = 跟随全局）。
+  /// 名称去空格，空名则保留原名；预估不得低于已完成数（避免进度异常）。
+  void updateTask(String id, String name, int estimated, [int pomoMin = 0]) {
+    final t = tasks.firstWhere((e) => e.id == id, orElse: () => throw StateError('task not found: $id'));
+    final trimmed = name.trim();
+    if (trimmed.isNotEmpty) t.name = trimmed;
+    t.estimated = estimated < t.completed ? t.completed : estimated;
+    t.pomoMin = pomoMin < 0 ? 0 : pomoMin;
     _saveTasks();
     notifyListeners();
   }
@@ -172,6 +185,12 @@ class AppState extends ChangeNotifier {
   }
 
   Task? get currentTask => session == null ? null : tasks.where((t) => t.id == session!.taskId).firstOrNull;
+
+  /// 当前番茄的专注分钟数：任务单独设置过（pomoMin>0）则优先，否则跟随全局默认。
+  int get focusDurationMin {
+    final t = currentTask;
+    return (t != null && t.pomoMin > 0) ? t.pomoMin : settings.focusMin;
+  }
 
   // ---------- 计时核心（按时间戳，关软件不中断） ----------
   /// 当前阶段已进行的秒数（扣除暂停）
@@ -230,14 +249,14 @@ class AppState extends ChangeNotifier {
         s.startTs = DateTime.now().millisecondsSinceEpoch;
         s.pausedAccumMs = 0;
         s.pauseStartTs = null;
-        s.durationSec = settings.focusMin * 60;
+        s.durationSec = focusDurationMin * 60;
         s.ended = false;
         _playBell();
         _vibrate();
         flashTaskbar();
         _notifyDone(
           title: '休息结束 · 开始下一个番茄',
-          body: '专注 ${settings.focusMin} 分钟，继续保持节奏',
+          body: '专注 ${focusDurationMin} 分钟，继续保持节奏',
         );
       }
       _saveSession();
@@ -255,7 +274,7 @@ class AppState extends ChangeNotifier {
       taskId: t.id,
       taskName: t.name,
       startTs: DateTime.now().millisecondsSinceEpoch,
-      durationSec: settings.focusMin * 60,
+      durationSec: (t.pomoMin > 0 ? t.pomoMin : settings.focusMin) * 60,
       pomodoroNo: 1,
     );
     _saveSession();
@@ -381,7 +400,7 @@ class AppState extends ChangeNotifier {
     s.startTs = DateTime.now().millisecondsSinceEpoch;
     s.pausedAccumMs = 0;
     s.pauseStartTs = null;
-    s.durationSec = settings.focusMin * 60;
+    s.durationSec = focusDurationMin * 60;
     s.ended = false;
     _saveSession();
     notifyListeners();
@@ -395,7 +414,7 @@ class AppState extends ChangeNotifier {
     s.startTs = DateTime.now().millisecondsSinceEpoch;
     s.pausedAccumMs = 0;
     s.pauseStartTs = null;
-    s.durationSec = settings.focusMin * 60;
+    s.durationSec = focusDurationMin * 60;
     s.ended = false;
     s.pomodoroNo += 1;
     s.note = '';
@@ -465,6 +484,13 @@ class AppState extends ChangeNotifier {
   /// 深色模式：'system'（跟随系统，默认）/ 'light' / 'dark'
   void setThemeMode(String mode) {
     settings.themeMode = mode;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  /// 全局字体缩放：0.9（小）/ 1.0（标准）/ 1.15（大）
+  void setFontScale(double scale) {
+    settings.fontScale = scale.clamp(0.8, 1.3);
     _saveSettings();
     notifyListeners();
   }

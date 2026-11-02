@@ -21,6 +21,10 @@ String fmtSec(int s) {
 String fmtClock(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
+/// 当前时间 HH:mm:ss（专注页顶部常显）
+String fmtClockSec(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
+
 /// 计时流程界面：专注 / 到时提醒 / 休息 / 下一个番茄开始前
 class TimerFlowScreen extends StatefulWidget {
   const TimerFlowScreen({super.key});
@@ -213,11 +217,30 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                     onTap: _onBodyTap,
                   ),
                 ),
-                Column(
-                  children: [
-                    // 顶栏：返回 / 阶段徽章 / 专注设置（专注中自动隐藏，触屏点击恢复）
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                // 内容区：窗口较矮时整体可滚动（避免重叠/溢出），够高时垂直居中
+                LayoutBuilder(
+                  builder: (ctx, cons) {
+                    final availH = cons.maxHeight;
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.zero,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: availH),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _onBodyTap,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 当前时间（常显，专注中显示在“专注中”上方）
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(fmtClockSec(DateTime.now()),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textMid, letterSpacing: 1.5)),
+                ),
+                // 顶栏：返回 / 阶段徽章 / 专注设置（专注中自动隐藏，触屏点击恢复）
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       child: Row(
                         children: [
                           Visibility(
@@ -265,22 +288,20 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                       ),
                     ),
                     // 水波纹计时 + 数字
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                             if (isPreStart)
-                              TomatoView(full: true, size: 200)
+                              TomatoView(full: true, size: (availH * 0.6).clamp(120.0, 200.0))
                             else
                               LayoutBuilder(builder: (ctx, box) {
-                                final size = (box.maxHeight < box.maxWidth ? box.maxHeight : box.maxWidth) * 0.85;
-                                return WaveTimerView(progress: waveProgress, resting: isBreak, paused: paused, size: size.clamp(160.0, 240.0));
+                                final size = (availH < box.maxWidth ? availH : box.maxWidth) * 0.85;
+                                return WaveTimerView(progress: waveProgress, resting: isBreak, paused: paused, size: size.clamp(120.0, 240.0));
                               }),
                             const SizedBox(height: 20),
                             Text(timeText,
                                 style: TextStyle(
-                                  fontSize: 40,
+                                  fontSize: (availH * 0.09).clamp(30.0, 46.0),
                                   fontWeight: FontWeight.w900,
                                   color: paused ? AppColors.textGray : AppColors.textDark,
                                   letterSpacing: -1,
@@ -291,7 +312,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                   ? '本次第 ${s.pomodoroNo} 个番茄 · 专注任务中'
                                   : isBreak
                                       ? '休息也是一个番茄的一环'
-                                      : '下一个：专注 ${app.settings.focusMin} 分钟 · 第 ${s.pomodoroNo + 1} 个番茄',
+                                      : '下一个：专注 ${app.focusDurationMin} 分钟 · 第 ${s.pomodoroNo + 1} 个番茄',
                               style: TextStyle(color: AppColors.textGray, fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                             // 当前任务名
@@ -304,8 +325,6 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                             ],
                           ],
                         ),
-                      ),
-                    ),
                     // 周期圆点 + 任务进度
                     // 有任务：圆点数量跟随任务的预估番茄数（实际超过预估时圆点随之增加）
                     // 无任务：保持"每 N 个番茄长休息"的周期圆点
@@ -401,9 +420,14 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 16),
                   ],
                 ),
+                ),
+                ),
+                );
+              },
+            ),
                 // 到时提醒浮层
                 if (isFocus && s.ended)
                   Positioned.fill(
