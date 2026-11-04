@@ -22,6 +22,8 @@ class AppState extends ChangeNotifier {
   static const _kSession = 'session';
   static const _kCycleDone = 'cycleDone';
   static const _kLastChange = 'lastChangeTs';
+  static const _kLastBreakEnd = 'lastBreakEndTs';
+  static const _kLastBreakMin = 'lastBreakMin';
 
   late final SharedPreferences _prefs;
   final List<Task> tasks = [];
@@ -34,6 +36,10 @@ class AppState extends ChangeNotifier {
 
   /// 本地数据最后一次变更时间（用于启动自动同步判断谁更新）
   int _lastChangeTs = 0;
+
+  /// 最近一次休息（短/长休）结束的时间戳与当时时长（分钟）；用于久置自动重置周期判断
+  int lastBreakEndTs = 0;
+  int lastBreakMin = 0;
 
   /// 最近一次 WebDAV 同步状态提示（null = 无）
   String? webdavStatus;
@@ -67,6 +73,8 @@ class AppState extends ChangeNotifier {
     }
     cycleDone = _prefs.getInt(_kCycleDone) ?? 0;
     _lastChangeTs = _prefs.getInt(_kLastChange) ?? 0;
+    lastBreakEndTs = _prefs.getInt(_kLastBreakEnd) ?? 0;
+    lastBreakMin = _prefs.getInt(_kLastBreakMin) ?? 0;
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     _onTick();
     // 恢复未结束会话后应用屏幕常亮状态
@@ -75,6 +83,8 @@ class AppState extends ChangeNotifier {
     PlatformDispatcher.instance.onPlatformBrightnessChanged = () {
       if (settings.themeMode == 'system') notifyListeners();
     };
+    // 久置自动重置周期：无进行中会话且距上次休息超过其时长，则把番茄周期计数归零
+    if (session == null) _maybeResetCycleAfterGap();
     notifyListeners();
     // 安卓 13+ 通知权限（开关打开时才申请）
     if (settings.notifyOn) {
@@ -111,6 +121,36 @@ class AppState extends ChangeNotifier {
   void _saveCycle() {
     _prefs.setInt(_kCycleDone, cycleDone);
     _markChanged();
+  }
+
+  /// 记录一次休息结束：保存结束时间戳与当时休息时长（分钟），供久置自动重置判断。
+  void _markBreakEnded(int breakDurationSec) {
+    lastBreakEndTs = DateTime.now().millisecondsSinceEpoch;
+    lastBreakMin = (breakDurationSec ~/ 60).clamp(0, 9999);
+    _prefs.setInt(_kLastBreakEnd, lastBreakEndTs);
+    _prefs.setInt(_kLastBreakMin, lastBreakMin);
+  }
+
+  /// 久置自动重置：若开启、存在上次休息记录、当前周期未归零，且空闲时长已超过上次休息时长，
+  /// 则把番茄周期计数（cycleDone）归零，相当于重新开始一轮。仅在没有进行中会话时调用。
+  void _maybeResetCycleAfterGap() {
+    if (!settings.autoResetAfterGap) return;
+    if (lastBreakEndTs <= 0 || cycleDone <= 0) return;
+    final thresholdMs = lastBreakMin * 60 * 1000;
+    if (thresholdMs <= 0) return;
+    final gapMs = DateTime.now().millisecondsSinceEpoch - lastBreakEndTs;
+    if (gapMs > thresholdMs) {
+      cycleDone = 0;
+      _saveCycle();
+    }
+  }
+
+  /// 自动同步开关开启时，把当前数据上传到 WebDAV（静默失败）。
+  /// 仅在倒计时起止、打断、暂停等状态边界调用，倒计时过程中不做周期性上传（避免耗尽 WebDAV 流量）。
+  void _syncCloudIfAuto() {
+    if (settings.webdavOn && settings.webdavAutoSync && settings.webdavConfigured) {
+      unawaited(uploadToCloud(auto: true));
+    }
   }
 
   /// 会话持久化：所有会话状态变化都会经过这里，顺带应用屏幕常亮
@@ -232,7 +272,7 @@ class AppState extends ChangeNotifier {
       if (s.phase == SessionPhase.focus) {
         // 自然到时：自动记录一个番茄，弹出结束提醒等待手动开始休息
         s.ended = true;
-        _recordPomodoro(s.durationSec);
+        _recordPomodoro(s.durationSec); // 内部已上传云端，无需再 _syncCloudIfAuto
         _playBell();
         _vibrate();
         flashTaskbar(); // 最小化时任务栏图标闪红提醒
@@ -243,8 +283,10 @@ class AppState extends ChangeNotifier {
               ? '「${s.taskName}」完成第 ${s.pomodoroNo} 个番茄，休息 $breakMin 分钟吧'
               : '本次专注完成，休息 $breakMin 分钟吧',
         );
+        _saveSession();
       } else if (s.phase == SessionPhase.shortBreak || s.phase == SessionPhase.longBreak) {
         // 休息结束：自动进入下一个番茄开始前界面
+        _markBreakEnded(s.durationSec); // 记录本次休息结束时间与时长
         s.phase = SessionPhase.preStart;
         s.startTs = DateTime.now().millisecondsSinceEpoch;
         s.pausedAccumMs = 0;
@@ -256,19 +298,25 @@ class AppState extends ChangeNotifier {
         flashTaskbar();
         _notifyDone(
           title: '休息结束 · 开始下一个番茄',
-          body: '专注 ${focusDurationMin} 分钟，继续保持节奏',
+          body: '专注 $focusDurationMin 分钟，继续保持节奏',
         );
+        _saveSession();
+        _syncCloudIfAuto(); // 休息结束转换：把最新状态同步到 WebDAV
       }
-      _saveSession();
-    } else if (s.phase == SessionPhase.focus && !s.ended) {
-      // 专注倒计时"咔咔"声（每秒一次，暂停时不响）
-      _playTick();
+      // 注意：preStart 等"等待态"也会进入本 if 分支，但此处不再统一做保存/同步——
+      // 否则一旦其虚拟计时走完，会每秒触发一次 WebDAV 上传（即本次 bug）。
+    } else {
+      if (s.phase == SessionPhase.focus && !s.ended) {
+        // 专注倒计时"咔咔"声（每秒一次，暂停时不响）
+        _playTick();
+      }
     }
     notifyListeners();
   }
 
   void startTask(Task t) {
     if (session != null) return;
+    _maybeResetCycleAfterGap(); // 全新开始：先判断久置自动重置
     session = Session(
       phase: SessionPhase.focus,
       taskId: t.id,
@@ -278,6 +326,7 @@ class AppState extends ChangeNotifier {
       pomodoroNo: 1,
     );
     _saveSession();
+    _syncCloudIfAuto();
     notifyListeners();
   }
 
@@ -292,6 +341,7 @@ class AppState extends ChangeNotifier {
       s.pauseStartTs = null;
     }
     _saveSession();
+    _syncCloudIfAuto();
     notifyListeners();
   }
 
@@ -315,6 +365,7 @@ class AppState extends ChangeNotifier {
         _applyOvertime();
         session = null;
         _saveSession();
+        _syncCloudIfAuto();
         notifyListeners();
         return;
       }
@@ -325,9 +376,13 @@ class AppState extends ChangeNotifier {
         _enterBreak(s, now);
         return;
       }
+    } else if (s.phase == SessionPhase.shortBreak || s.phase == SessionPhase.longBreak) {
+      // 休息中提前结束：视为该次休息已结束，记录时间供久置重置判断
+      _markBreakEnded(s.durationSec);
     }
     session = null;
     _saveSession();
+    _syncCloudIfAuto();
     notifyListeners();
   }
 
@@ -346,6 +401,7 @@ class AppState extends ChangeNotifier {
       _saveCycle();
     }
     _saveSession();
+    _syncCloudIfAuto();
     notifyListeners();
   }
 
@@ -396,6 +452,7 @@ class AppState extends ChangeNotifier {
   void skipBreak() {
     final s = session;
     if (s == null || (s.phase != SessionPhase.shortBreak && s.phase != SessionPhase.longBreak)) return;
+    _markBreakEnded(s.durationSec); // 跳过休息也视为该次休息结束
     s.phase = SessionPhase.preStart;
     s.startTs = DateTime.now().millisecondsSinceEpoch;
     s.pausedAccumMs = 0;
@@ -403,6 +460,7 @@ class AppState extends ChangeNotifier {
     s.durationSec = focusDurationMin * 60;
     s.ended = false;
     _saveSession();
+    _syncCloudIfAuto();
     notifyListeners();
   }
 
@@ -410,6 +468,7 @@ class AppState extends ChangeNotifier {
     final s = session;
     if (s == null || s.phase != SessionPhase.preStart) return;
     // 跳过休息直接开下一轮时，超时已在 startBreak/skipBreak 前补记
+    _maybeResetCycleAfterGap(); // 久置后从「下一个番茄开始前」开始也算全新一轮
     s.phase = SessionPhase.focus;
     s.startTs = DateTime.now().millisecondsSinceEpoch;
     s.pausedAccumMs = 0;
@@ -419,6 +478,7 @@ class AppState extends ChangeNotifier {
     s.pomodoroNo += 1;
     s.note = '';
     _saveSession();
+    _syncCloudIfAuto();
     notifyListeners();
   }
 
