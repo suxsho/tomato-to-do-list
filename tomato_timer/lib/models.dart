@@ -109,6 +109,9 @@ class Settings {
   String webdavUser; // 账号
   String webdavPass; // 密码 / 应用秘钥
   String webdavPath; // 同步文件夹路径，如 /PomodoroData/
+  bool autoResetAfterGap; // 久置自动重置番茄周期：距上次休息超过其时长则归零 cycleDone
+  bool dailyResetOn; // 每天番茄清零：以凌晨 5:00 为日界，跨天把任务当日进度归零（历史记录保留）
+  bool noEstimate; // 无总番茄预估：不用设置预估番茄数，任务长期复用、不自动结束
 
   Settings({
     this.focusMin = 25,
@@ -129,6 +132,9 @@ class Settings {
     this.webdavUser = '',
     this.webdavPass = '',
     this.webdavPath = '/PomodoroData/',
+    this.autoResetAfterGap = true,
+    this.dailyResetOn = false,
+    this.noEstimate = false,
   });
 
   bool get webdavConfigured => webdavUrl.trim().isNotEmpty && webdavUser.trim().isNotEmpty;
@@ -152,6 +158,9 @@ class Settings {
         'webdavUser': webdavUser,
         'webdavPass': webdavPass,
         'webdavPath': webdavPath,
+        'autoResetAfterGap': autoResetAfterGap,
+        'dailyResetOn': dailyResetOn,
+        'noEstimate': noEstimate,
       };
 
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
@@ -173,6 +182,9 @@ class Settings {
         webdavUser: j['webdavUser'] as String? ?? '',
         webdavPass: j['webdavPass'] as String? ?? '',
         webdavPath: j['webdavPath'] as String? ?? '/PomodoroData/',
+        autoResetAfterGap: j['autoResetAfterGap'] == true,
+        dailyResetOn: j['dailyResetOn'] == true,
+        noEstimate: j['noEstimate'] == true,
       );
 }
 

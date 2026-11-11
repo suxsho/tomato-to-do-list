@@ -258,7 +258,7 @@ class MineScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text('番茄任务清单', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
               const SizedBox(height: 2),
-              Text('Minimal Focus Timer v0.3.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+              Text('Minimal Focus Timer v0.5.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -349,7 +349,7 @@ class MineScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                child: const Text('版本 0.3.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: const Text('版本 0.5.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -357,13 +357,27 @@ class MineScreen extends StatelessWidget {
         // 番茄钟设置（从首页移到这里）
         SoftCard(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: _row(
-            context,
-            Icons.timer_outlined,
-            '番茄钟设置',
-            '专注 ${app.settings.focusMin} / 短休 ${app.settings.shortBreakMin} / 长休 ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
-            () => showSettingsDialog(context),
-            iconColor: AppColors.red,
+          child: Column(
+            children: [
+              _row(
+                context,
+                Icons.timer_outlined,
+                '番茄钟设置',
+                '专注 ${app.settings.focusMin} / 短休 ${app.settings.shortBreakMin} / 长休 ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
+                () => showSettingsDialog(context),
+                iconColor: AppColors.red,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 56, right: 16, bottom: 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '内含「每天番茄清零」${app.settings.dailyResetOn ? '（已开）' : ''}、「无总番茄预估」${app.settings.noEstimate ? '（已开）' : ''} 开关',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textGray),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         // 外观与字体

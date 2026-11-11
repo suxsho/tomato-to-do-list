@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
@@ -16,12 +17,23 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _nameCtrl = TextEditingController();
-  int _estimated = 1;
+  final _estCtrl = TextEditingController(text: '1'); // 预估番茄数，可直接输入
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _estCtrl.dispose();
     super.dispose();
+  }
+
+  int _parseEstimated() => (int.tryParse(_estCtrl.text.trim()) ?? 1).clamp(1, 999);
+
+  /// +/- 按钮同步刷新输入框，并把光标留在末尾
+  void _setEst(int v) {
+    final next = v.clamp(1, 999);
+    _estCtrl.text = '$next';
+    _estCtrl.selection = TextSelection.collapsed(offset: _estCtrl.text.length);
+    setState(() {});
   }
 
   void _add() {
@@ -42,9 +54,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('先写下要做什么')));
       return;
     }
-    context.read<AppState>().addTask(name, _estimated, pomoMin);
+    context.read<AppState>().addTask(name, _parseEstimated(), pomoMin);
     _nameCtrl.clear();
-    setState(() => _estimated = 1);
+    _estCtrl.text = '1';
   }
 
   @override
@@ -53,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final todo = app.tasks.where((t) => !t.done).toList();
     final done = app.tasks.where((t) => t.done).toList();
     final estTotal = todo.fold<int>(0, (a, t) => a + t.estimated);
+    final noEst = app.settings.noEstimate;
 
     // 左侧（竖屏时在上方）：今日概览 + 新建任务；右侧（竖屏时在下方）：待办与已完成
     final overview = <Widget>[
@@ -62,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (app.session != null) _sessionEntry(app),
     ];
     final tasks = <Widget>[
-      _todoHeader(estTotal),
+      _todoHeader(noEst ? 0 : estTotal, todo.length, noEst),
       ..._todoSection(app, todo),
       ..._doneSection(app, done),
     ];
@@ -184,26 +197,43 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Padding(padding: EdgeInsets.only(left: 4), child: Text('预估要几个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(12)),
-                child: Row(
-                  children: [
-                    _miniBtn(icon: Icons.remove, onTap: () => setState(() => _estimated = (_estimated - 1).clamp(1, 24))),
-                    SizedBox(
-                      width: 30,
-                      child: Text('$_estimated', textAlign: TextAlign.center, maxLines: 1, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-                    ),
-                    _miniBtn(icon: Icons.add, onTap: () => setState(() => _estimated = (_estimated + 1).clamp(1, 24))),
-                  ],
+          if (app.settings.noEstimate)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text('已开启「无总番茄预估」：直接添加任务，可长期反复计时',
+                  style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600)),
+            )
+          else
+            Row(
+              children: [
+                Padding(padding: const EdgeInsets.only(left: 4), child: Text('预估要几个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      _miniBtn(icon: Icons.remove, onTap: () => _setEst(_parseEstimated() - 1)),
+                      SizedBox(
+                        width: 42,
+                        height: 26,
+                        child: TextField(
+                          controller: _estCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          textAlign: TextAlign.center,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                          decoration: const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.zero),
+                        ),
+                      ),
+                      _miniBtn(icon: Icons.add, onTap: () => _setEst(_parseEstimated() + 1)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           Padding(
             padding: const EdgeInsets.only(left: 4, top: 4),
             child: Text('提示：内容里加 #15 可把该任务设为每个番茄 15 分钟（不写则跟随默认）',
@@ -248,10 +278,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------- 待办标题 ----------
-  Widget _todoHeader(int estTotal) {
+  Widget _todoHeader(int estTotal, int taskCount, bool noEst) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
-      child: Text('待办 · 共预估 $estTotal 个番茄', style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.bold)),
+      child: Text(noEst ? '待办 · 共 $taskCount 个任务（无预估，可长期计时）' : '待办 · 共预估 $estTotal 个番茄',
+          style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -321,7 +352,14 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final busy = app.session != null;
+    // 当前任务正是进行中的那个：按钮显示"进行中"而不是灰掉的"开始"
+    final activeHere = busy && app.session!.taskId == task.id;
     final isDone = task.done;
+    // 无总番茄预估：不显示 x/y，圆点只表示"已完成几个"，任务不会自动结束
+    final noEst = app.settings.noEstimate || task.estimated <= 0;
+    final shownEst = task.estimated < 1 ? 1 : task.estimated;
+    final int dots = (noEst ? task.completed : (task.completed > shownEst ? task.completed : shownEst)).clamp(0, 8).toInt();
+    final tail = task.pomoMin > 0 ? ' · 每番茄 ${task.pomoMin} 分' : '';
 
     Widget card = SoftCard(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -361,7 +399,7 @@ class _TaskCard extends StatelessWidget {
                     children: [
                       // 番茄进度小图标：完成的画小番茄，未完成的画灰圈
                       ...List.generate(
-                        task.estimated > 8 ? 8 : task.estimated,
+                        dots,
                         (i) => Padding(
                           padding: const EdgeInsets.only(right: 3),
                           child: i < task.completed
@@ -373,8 +411,10 @@ class _TaskCard extends StatelessWidget {
                                 ),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Text('${task.completed}/${task.estimated} 个番茄 · 专注 ${task.focusSec ~/ 60} 分钟${task.pomoMin > 0 ? ' · 每番茄 ${task.pomoMin} 分' : ''}',
+                      if (dots > 0) const SizedBox(width: 6),
+                      Text(noEst
+                          ? '已完成 ${task.completed} 个番茄 · 专注 ${task.focusSec ~/ 60} 分钟$tail'
+                          : '${task.completed}/$shownEst 个番茄 · 专注 ${task.focusSec ~/ 60} 分钟$tail',
                           style: TextStyle(fontSize: 10, color: AppColors.textGray)),
                     ],
                   ),
@@ -393,11 +433,18 @@ class _TaskCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                   decoration: BoxDecoration(
-                    color: busy ? AppColors.slate100 : AppColors.red,
+                    color: activeHere ? AppColors.redBg : (busy ? AppColors.slate100 : AppColors.red),
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: busy ? null : const [BoxShadow(color: Color(0x29FF5A5F), blurRadius: 8, offset: Offset(0, 2))],
+                    boxShadow: (!busy && !activeHere) ? const [BoxShadow(color: Color(0x29FF5A5F), blurRadius: 8, offset: Offset(0, 2))] : null,
                   ),
-                  child: Text('开始', style: TextStyle(color: busy ? AppColors.textGray : Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    activeHere ? '进行中' : '开始',
+                    style: TextStyle(
+                      color: activeHere ? AppColors.red : (busy ? AppColors.textGray : Colors.white),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -543,11 +590,19 @@ class _TaskCard extends StatelessWidget {
   /// 编辑任务弹窗：预填名称、预估番茄数与每个番茄时长；可修改后保存
   void _showEditTask(BuildContext context, Task t) {
     final nameCtrl = TextEditingController(text: t.name);
-    int est = t.estimated;
+    final noEst = context.read<AppState>().settings.noEstimate;
     final minEst = t.completed == 0 ? 1 : t.completed;
-    int pomo = t.pomoMin; // 0 = 跟随全局默认
     bool customPomo = t.pomoMin > 0;
     final globalFocus = context.read<AppState>().settings.focusMin;
+    // 预估番茄数 / 自定义时长都改成可直接输入的数字框（保留 +/- 快捷加减）
+    final estCtrl = TextEditingController(text: '${t.estimated < 1 ? 1 : t.estimated}');
+    final pomoCtrl = TextEditingController(text: '${t.pomoMin > 0 ? t.pomoMin : globalFocus}');
+    int parseEst() => (int.tryParse(estCtrl.text.trim()) ?? minEst).clamp(minEst, 999).toInt();
+    int parsePomo() => (int.tryParse(pomoCtrl.text.trim()) ?? globalFocus).clamp(1, 180).toInt();
+    void setNum(TextEditingController c, int v, int min, int max) {
+      c.text = '${v.clamp(min, max)}';
+      c.selection = TextSelection.collapsed(offset: c.text.length);
+    }
     Widget miniBtn({required IconData icon, required VoidCallback onTap}) => GestureDetector(
       onTap: onTap,
       child: Container(
@@ -557,14 +612,14 @@ class _TaskCard extends StatelessWidget {
         child: Icon(icon, size: 14, color: AppColors.textMid),
       ),
     );
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierColor: const Color(0x660F172A),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
-            width: (MediaQuery.of(ctx).size.width - 48).clamp(280.0, 360.0),
+            width: (MediaQuery.of(ctx).size.width - 48).clamp(280.0, 380.0),
             constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.88),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -589,7 +644,7 @@ class _TaskCard extends StatelessWidget {
                           child: TextField(
                             controller: nameCtrl,
                             autofocus: true,
-                            onSubmitted: (_) => _commitEdit(ctx, t, nameCtrl.text, est, customPomo ? pomo : 0),
+                            onSubmitted: (_) => _commitEdit(ctx, t, nameCtrl.text, noEst ? 0 : parseEst(), customPomo ? parsePomo() : 0),
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textDark),
                             decoration: InputDecoration(
                               hintText: '要做什么？',
@@ -601,26 +656,43 @@ class _TaskCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Padding(padding: EdgeInsets.only(left: 4), child: Text('预估要几个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                              decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(12)),
-                              child: Row(
-                                children: [
-                                  miniBtn(icon: Icons.remove, onTap: () => setSt(() => est = (est - 1).clamp(minEst, 24))),
-                                  SizedBox(
-                                    width: 30,
-                                    child: Text('$est', textAlign: TextAlign.center, maxLines: 1, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-                                  ),
-                                  miniBtn(icon: Icons.add, onTap: () => setSt(() => est = (est + 1).clamp(minEst, 24))),
-                                ],
+                        if (noEst)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text('已开启「无总番茄预估」：无需设置总量，任务可长期计时',
+                                style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600)),
+                          )
+                        else
+                          Row(
+                            children: [
+                              Padding(padding: const EdgeInsets.only(left: 4), child: Text('预估要几个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(12)),
+                                child: Row(
+                                  children: [
+                                    miniBtn(icon: Icons.remove, onTap: () => setSt(() => setNum(estCtrl, parseEst() - 1, minEst, 999))),
+                                    SizedBox(
+                                      width: 42,
+                                      height: 26,
+                                      child: TextField(
+                                        controller: estCtrl,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                        textAlign: TextAlign.center,
+                                        textInputAction: TextInputAction.done,
+                                        onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                                        decoration: const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.zero),
+                                      ),
+                                    ),
+                                    miniBtn(icon: Icons.add, onTap: () => setSt(() => setNum(estCtrl, parseEst() + 1, minEst, 999))),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
                         const SizedBox(height: 14),
                         Row(
                           children: [
@@ -633,7 +705,7 @@ class _TaskCard extends StatelessWidget {
                               activeTrackColor: AppColors.red,
                               onChanged: (v) => setSt(() {
                                 customPomo = v;
-                                if (v && pomo == 0) pomo = globalFocus;
+                                if (v && pomoCtrl.text.trim().isEmpty) pomoCtrl.text = '$globalFocus';
                               }),
                             ),
                           ],
@@ -642,19 +714,31 @@ class _TaskCard extends StatelessWidget {
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Padding(padding: EdgeInsets.only(left: 4), child: Text('每个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
+                              Padding(padding: const EdgeInsets.only(left: 4), child: Text('每个番茄', style: TextStyle(color: AppColors.textMid, fontSize: 12, fontWeight: FontWeight.w600))),
                               const Spacer(),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                                 decoration: BoxDecoration(color: AppColors.slate100, borderRadius: BorderRadius.circular(12)),
                                 child: Row(
                                   children: [
-                                    miniBtn(icon: Icons.remove, onTap: () => setSt(() => pomo = (pomo - 1).clamp(1, 180))),
+                                    miniBtn(icon: Icons.remove, onTap: () => setSt(() => setNum(pomoCtrl, parsePomo() - 1, 1, 180))),
                                     SizedBox(
-                                      width: 34,
-                                      child: Text('$pomo', textAlign: TextAlign.center, maxLines: 1, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                                      width: 48,
+                                      height: 26,
+                                      child: TextField(
+                                        controller: pomoCtrl,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                        textAlign: TextAlign.center,
+                                        textInputAction: TextInputAction.done,
+                                        onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                                        decoration: const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.zero),
+                                      ),
                                     ),
-                                    miniBtn(icon: Icons.add, onTap: () => setSt(() => pomo = (pomo + 1).clamp(1, 180))),
+                                    const SizedBox(width: 4),
+                                    Text('分钟', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+                                    miniBtn(icon: Icons.add, onTap: () => setSt(() => setNum(pomoCtrl, parsePomo() + 1, 1, 180))),
                                   ],
                                 ),
                               ),
@@ -673,7 +757,7 @@ class _TaskCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 GestureDetector(
-                  onTap: () => _commitEdit(ctx, t, nameCtrl.text, est, customPomo ? pomo : 0),
+                  onTap: () => _commitEdit(ctx, t, nameCtrl.text, noEst ? 0 : parseEst(), customPomo ? parsePomo() : 0),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 13),
@@ -700,7 +784,11 @@ class _TaskCard extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ).then((_) {
+      nameCtrl.dispose();
+      estCtrl.dispose();
+      pomoCtrl.dispose();
+    });
   }
 
   void _commitEdit(BuildContext ctx, Task t, String name, int est, int pomoMin) {

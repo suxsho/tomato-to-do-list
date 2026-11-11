@@ -10,6 +10,8 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_state.dart';
+import 'launch_args.dart';
+import 'mini_mode.dart';
 import 'screens/home_screen.dart';
 import 'screens/mine_screen.dart';
 import 'screens/stats_screen.dart';
@@ -56,9 +58,26 @@ Future<void> main() async {
   }
   final app = AppState();
   await app.init();
+  final mini = MiniModeController();
+  await mini.init();
   runApp(
-    ChangeNotifierProvider.value(value: app, child: const TomatoApp()),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: app),
+        ChangeNotifierProvider.value(value: mini),
+      ],
+      child: const TomatoApp(),
+    ),
   );
+
+  // 桌面快捷方式带 --mini 时，启动后直接变成圆形小组件。
+  // 等首帧渲染完再改窗口，避免 native 侧还没准备好就被 setBounds。
+  if (!kIsWeb && Platform.isWindows && LaunchArgs.contains('--mini')) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await mini.enter();
+    });
+  }
 }
 
 class TomatoApp extends StatelessWidget {
@@ -87,10 +106,21 @@ class TomatoApp extends StatelessWidget {
       themeMode: mode,
       home: const MainShell(),
       // 全局字体缩放：设置页「字体大小」在此生效（小 0.9 / 标准 1.0 / 大 1.15）
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(app.settings.fontScale)),
-        child: child!,
-      ),
+      // mini 模式：不替换 home，而是把原界面 Offstage 掉再叠一层圆形小窗，
+      // 这样导航栈 / 进行中的会话 / 计时页状态全部原样保留。
+      builder: (context, child) {
+        final isMini = context.watch<MiniModeController>().mini;
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(app.settings.fontScale)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Offstage(offstage: isMini, child: child!),
+              if (isMini) const Positioned.fill(child: MiniTimerView()),
+            ],
+          ),
+        );
+      },
     );
   }
 

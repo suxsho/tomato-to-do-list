@@ -3,8 +3,10 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../mini_mode.dart';
 import '../theme.dart';
 
 /// 自定义标题栏：拖拽移动 + 双击最大化 + 置顶胶囊 Toggle + 窗口按钮
@@ -97,6 +99,15 @@ class _AppTitleBarState extends State<AppTitleBar> with WindowListener {
                   ),
                 ),
               ),
+              // mini 计时模式（仅 Windows）：缩小成桌面圆形小组件
+              if (AppTitleBar._show)
+                Tooltip(
+                  message: 'mini 计时模式（桌面小组件）',
+                  child: _WinButton(
+                    icon: Icons.picture_in_picture_alt,
+                    onTap: () => context.read<MiniModeController>().enter(),
+                  ),
+                ),
               // 置顶胶囊 Toggle
               GestureDetector(
                 onTap: _togglePin,

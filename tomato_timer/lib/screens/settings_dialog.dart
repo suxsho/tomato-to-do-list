@@ -6,7 +6,8 @@ import '../app_state.dart';
 import '../models.dart';
 import '../theme.dart';
 
-/// 番茄钟设置：专注 / 短休息 / 长休息 / 长休息周期 + 深色模式
+/// 番茄钟设置：专注 / 短休息 / 长休息 / 长休息周期
+/// 深色模式在「我的」页外观卡片里，此处不再重复提供
 /// 视觉与「结束本次番茄？」「专注设置」等弹窗保持一致
 Future<void> showSettingsDialog(BuildContext context) {
   // 打开前先收键盘，避免弹窗关闭后输入框重新抢焦点
@@ -30,7 +31,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   late final TextEditingController _shortCtrl;
   late final TextEditingController _longCtrl;
   late final TextEditingController _everyCtrl;
-  late String _themeMode;
+  late bool _autoReset;
+  late bool _dailyReset;
+  late bool _noEstimate;
 
   @override
   void initState() {
@@ -40,7 +43,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     _shortCtrl = TextEditingController(text: '${s.shortBreakMin}');
     _longCtrl = TextEditingController(text: '${s.longBreakMin}');
     _everyCtrl = TextEditingController(text: '${s.longBreakEvery}');
-    _themeMode = s.themeMode;
+    _autoReset = s.autoResetAfterGap;
+    _dailyReset = s.dailyResetOn;
+    _noEstimate = s.noEstimate;
   }
 
   @override
@@ -65,7 +70,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     next.shortBreakMin = _parse(_shortCtrl, cur.shortBreakMin, 1, 60);
     next.longBreakMin = _parse(_longCtrl, cur.longBreakMin, 1, 120);
     next.longBreakEvery = _parse(_everyCtrl, cur.longBreakEvery, 2, 12);
-    next.themeMode = _themeMode;
+    next.themeMode = cur.themeMode; // 主题在「我的」外观里改，这里保持原值
+    next.autoResetAfterGap = _autoReset;
+    next.dailyResetOn = _dailyReset;
+    next.noEstimate = _noEstimate;
     app.updateSettings(next);
     FocusManager.instance.primaryFocus?.unfocus();
     Navigator.pop(context);
@@ -78,7 +86,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
       child: Container(
-        width: 340,
+        width: 380,
         constraints: BoxConstraints(maxHeight: maxH),
         decoration: BoxDecoration(
           color: AppColors.card, // 实色打底，防止渐变透底
@@ -175,40 +183,31 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    // 深色模式
-                    Row(
-                      children: [
-                        Icon(Icons.dark_mode_outlined, size: 16, color: AppColors.textGray),
-                        const SizedBox(width: 8),
-                        Text('深色模式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDark)),
-                      ],
+                    // 长期使用 / 免勾选完成 的三个开关
+                    _switchRow(
+                      icon: Icons.restart_alt,
+                      label: '久置自动重置周期',
+                      hint: '距上次休息超过其时长，下次开始归零番茄周期',
+                      value: _autoReset,
+                      onChanged: (v) => setState(() => _autoReset = v),
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: 'system', label: Text('跟随系统')),
-                          ButtonSegment(value: 'light', label: Text('浅色')),
-                          ButtonSegment(value: 'dark', label: Text('深色')),
-                        ],
-                        selected: {_themeMode},
-                        showSelectedIcon: false,
-                        style: SegmentedButton.styleFrom(
-                          selectedBackgroundColor: AppColors.red,
-                          selectedForegroundColor: Colors.white,
-                          backgroundColor: AppColors.slate100,
-                          foregroundColor: AppColors.textMid,
-                          side: BorderSide(color: AppColors.cardBorder),
-                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        onSelectionChanged: (sel) {
-                          setState(() => _themeMode = sel.first);
-                          context.read<AppState>().setThemeMode(sel.first);
-                        },
-                      ),
+                    _switchRow(
+                      icon: Icons.calendar_month_outlined,
+                      label: '每天番茄清零',
+                      hint: '以次日凌晨 5:00 为界，跨天把任务番茄进度重置为 0（历史统计保留）',
+                      value: _dailyReset,
+                      onChanged: (v) => setState(() => _dailyReset = v),
                     ),
+                    const SizedBox(height: 8),
+                    _switchRow(
+                      icon: Icons.all_inclusive,
+                      label: '无总番茄预估',
+                      hint: '不用填预估番茄数，任务不会结束，可长期反复计时',
+                      value: _noEstimate,
+                      onChanged: (v) => setState(() => _noEstimate = v),
+                    ),
+                    const SizedBox(height: 14),
                   ],
                 ),
               ),
@@ -254,6 +253,42 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _switchRow({
+    required IconData icon,
+    required String label,
+    required String hint,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+      decoration: BoxDecoration(color: AppColors.slate50, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: value ? AppColors.red : AppColors.textGray),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+                const SizedBox(height: 2),
+                Text(hint, style: TextStyle(fontSize: 10, height: 1.35, fontWeight: FontWeight.w500, color: AppColors.textGray)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Switch(
+            value: value,
+            activeThumbColor: Colors.white,
+            activeTrackColor: AppColors.red,
+            onChanged: onChanged,
+          ),
+        ],
       ),
     );
   }

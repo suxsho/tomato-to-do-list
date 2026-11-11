@@ -24,6 +24,7 @@ class AppState extends ChangeNotifier {
   static const _kLastChange = 'lastChangeTs';
   static const _kLastBreakEnd = 'lastBreakEndTs';
   static const _kLastBreakMin = 'lastBreakMin';
+  static const _kDailyResetDay = 'dailyResetDay'; // 上次「每天番茄清零」执行的逻辑日 yyyymmdd
 
   late final SharedPreferences _prefs;
   final List<Task> tasks = [];
@@ -40,6 +41,9 @@ class AppState extends ChangeNotifier {
   /// 最近一次休息（短/长休）结束的时间戳与当时时长（分钟）；用于久置自动重置周期判断
   int lastBreakEndTs = 0;
   int lastBreakMin = 0;
+
+  /// 上次执行「每天番茄清零」的逻辑日（yyyymmdd）；0 = 从未记录
+  int _dailyResetDay = 0;
 
   /// 最近一次 WebDAV 同步状态提示（null = 无）
   String? webdavStatus;
@@ -75,6 +79,7 @@ class AppState extends ChangeNotifier {
     _lastChangeTs = _prefs.getInt(_kLastChange) ?? 0;
     lastBreakEndTs = _prefs.getInt(_kLastBreakEnd) ?? 0;
     lastBreakMin = _prefs.getInt(_kLastBreakMin) ?? 0;
+    _dailyResetDay = _prefs.getInt(_kDailyResetDay) ?? 0;
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     _onTick();
     // 恢复未结束会话后应用屏幕常亮状态
@@ -145,6 +150,37 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// 「逻辑日」：开了每天清零时以凌晨 5:00 为日界（5 点前仍算前一天），
+  /// 否则按自然日 0:00 分界。返回 yyyymmdd 整数，方便比较与持久化。
+  int _logicalDayKey([DateTime? at]) {
+    final now = at ?? DateTime.now();
+    final boundaryHour = settings.dailyResetOn ? 5 : 0;
+    final d = now.hour < boundaryHour ? now.subtract(const Duration(days: 1)) : now;
+    return d.year * 10000 + d.month * 100 + d.day;
+  }
+
+  /// 每天番茄清零：开启后跨过日界（次日 5:00 起）把所有任务的当日进度归零，
+  /// 任务重新回到待办，不用手动勾选完成 / 重新建任务，可以反复给同一批计划计时。
+  /// 只清任务上的计数（completed / focusSec / done），历史 FocusRecord 全部保留，
+  /// 统计页仍按记录查得到往日数据。
+  /// 首次开启只记下当前日界、不清已有数据；从「第二天」开始才真正重置。
+  void _maybeDailyReset() {
+    if (!settings.dailyResetOn) return;
+    final key = _logicalDayKey();
+    if (_dailyResetDay == key) return;
+    final firstRun = _dailyResetDay == 0;
+    _dailyResetDay = key;
+    _prefs.setInt(_kDailyResetDay, key);
+    if (firstRun) return;
+    for (final t in tasks) {
+      t.completed = 0;
+      t.focusSec = 0;
+      t.done = false;
+    }
+    _saveTasks();
+    _syncCloudIfAuto();
+  }
+
   /// 自动同步开关开启时，把当前数据上传到 WebDAV（静默失败）。
   /// 仅在倒计时起止、打断、暂停等状态边界调用，倒计时过程中不做周期性上传（避免耗尽 WebDAV 流量）。
   void _syncCloudIfAuto() {
@@ -175,10 +211,12 @@ class AppState extends ChangeNotifier {
 
   // ---------- 任务 ----------
   void addTask(String name, int estimated, [int pomoMin = 0]) {
+    // 无总番茄预估模式：estimated = 0 表示"没有总量"，界面只显示已完成数
+    final est = settings.noEstimate ? 0 : estimated.clamp(1, 999);
     tasks.add(Task(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: name,
-      estimated: estimated,
+      estimated: est,
       createdAt: DateTime.now().millisecondsSinceEpoch,
       pomoMin: pomoMin,
     ));
@@ -198,7 +236,10 @@ class AppState extends ChangeNotifier {
     final t = tasks.firstWhere((e) => e.id == id, orElse: () => throw StateError('task not found: $id'));
     final trimmed = name.trim();
     if (trimmed.isNotEmpty) t.name = trimmed;
-    t.estimated = estimated < t.completed ? t.completed : estimated;
+    // 无预估模式下编辑任务不改原有预估数（关掉开关后还能恢复显示）
+    if (!settings.noEstimate) {
+      t.estimated = math.max(estimated < 1 ? 1 : estimated, t.completed);
+    }
     t.pomoMin = pomoMin < 0 ? 0 : pomoMin;
     _saveTasks();
     notifyListeners();
@@ -263,6 +304,8 @@ class AppState extends ChangeNotifier {
   }
 
   void _onTick() {
+    // 跨过凌晨 5:00 的日界时重置任务进度（每秒只做一次整数比较，开销可忽略）
+    if (settings.dailyResetOn) _maybeDailyReset();
     final s = session;
     if (s == null || s.isPaused) {
       notifyListeners();
@@ -870,6 +913,7 @@ class AppState extends ChangeNotifier {
         'records': records.map((e) => e.toJson()).toList(),
         'session': session?.toJson(),
         'cycleDone': cycleDone,
+        'dailyResetDay': _dailyResetDay,
         'lastChangeTs': _lastChangeTs,
       });
 
@@ -890,6 +934,9 @@ class AppState extends ChangeNotifier {
       cycleDone = (j['cycleDone'] as num?)?.toInt() ??
           (sessionJson?['cycleDone'] as num?)?.toInt() ??
           0;
+      // 多设备同步时带上「已执行清零的逻辑日」，避免另一台设备重复重置
+      _dailyResetDay = (j['dailyResetDay'] as num?)?.toInt() ?? 0;
+      _prefs.setInt(_kDailyResetDay, _dailyResetDay);
       _saveTasks();
       _saveRecords();
       _saveSettings();

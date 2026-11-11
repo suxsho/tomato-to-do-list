@@ -11,8 +11,20 @@ class WaveTimerView extends StatefulWidget {
   final double progress; // 已进行比例 0..1（0=空，1=满）
   final bool resting;
   final bool paused;
+  /// 番茄已到点/结束：整圆切换成绿色（休息绿），让"完成了"一眼可见
+  final bool finished;
   final double size;
-  const WaveTimerView({super.key, required this.progress, this.resting = false, this.paused = false, this.size = 220});
+  /// 强制浅色配色：透明桌面小窗口用它，避免深色主题下圆内透出桌面
+  final bool forceLight;
+  const WaveTimerView({
+    super.key,
+    required this.progress,
+    this.resting = false,
+    this.paused = false,
+    this.finished = false,
+    this.size = 220,
+    this.forceLight = false,
+  });
 
   @override
   State<WaveTimerView> createState() => _WaveTimerViewState();
@@ -54,7 +66,9 @@ class _WaveTimerViewState extends State<WaveTimerView> with SingleTickerProvider
           progress: widget.progress.clamp(0.0, 1.0),
           resting: widget.resting,
           paused: widget.paused,
+          finished: widget.finished,
           phase: _ctrl.value * 2 * math.pi,
+          light: widget.forceLight,
         ),
       ),
     );
@@ -65,8 +79,17 @@ class _WavePainter extends CustomPainter {
   final double progress;
   final bool resting;
   final bool paused;
+  final bool finished;
   final double phase;
-  _WavePainter({required this.progress, required this.resting, required this.paused, required this.phase});
+  final bool light;
+  _WavePainter({
+    required this.progress,
+    required this.resting,
+    required this.paused,
+    required this.finished,
+    required this.phase,
+    required this.light,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -74,8 +97,17 @@ class _WavePainter extends CustomPainter {
     final r = size.width / 2 - 4;
     final circle = Rect.fromCircle(center: center, radius: r);
 
-    // 圆环底色（暂停时变浅灰）
-    canvas.drawCircle(center, r, Paint()..color = paused ? const Color(0xFFF8FAFC) : resting ? AppColors.greenBg : AppColors.redBg);
+    // 到点（finished）与休息态共用绿色；绿色判断要排在 light 之前，
+    // 否则 mini 小组件（forceLight=true）永远是粉色、看不出完成状态。
+    final green = resting || finished;
+    final bg = paused
+        ? const Color(0xFFF8FAFC)
+        : green
+            ? (light ? const Color(0xFFEAF8F2) : AppColors.greenBg)
+            : light
+                ? const Color(0xFFFFF8F8)
+                : AppColors.redBg;
+    canvas.drawCircle(center, r, Paint()..color = bg);
 
     // 内部波浪（裁剪到圆内）
     canvas.save();
@@ -87,13 +119,14 @@ class _WavePainter extends CustomPainter {
     if (paused) {
       front = const Color(0x82D16E71); // 降饱和 40% + 透明度 0.6
       back = const Color(0x4DD16E71);
-    } else if (resting) {
+    } else if (green) {
       front = const Color(0xD94EBA8E);
       back = const Color(0x734EBA8E);
     } else {
       front = const Color(0xD9FF5A5F);
       back = const Color(0x73FF5A5F);
     }
+    // light 模式下颜色固定，不读 AppColors（那套会随深色主题变半透明）
 
     void wave(Color c, double ph, double dy, double ampMul) {
       final path = Path();
@@ -120,20 +153,32 @@ class _WavePainter extends CustomPainter {
     wave(front, phase, 0, 1.0);
     canvas.restore();
 
-    // 圆环描边
+    // 圆环描边（light 用固定浅粉，贴近设计稿的细粉圈）
+    final strokeColor = paused
+        ? const Color(0xFFF1F5F9)
+        : green
+            ? (light ? const Color(0xFFB6E8D3) : AppColors.greenLight)
+            : light
+                ? const Color(0xFFFFD3D7)
+                : AppColors.redLight;
     canvas.drawCircle(
       center,
       r,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 4
-        ..color = paused ? const Color(0xFFF1F5F9) : resting ? AppColors.greenLight : AppColors.redLight,
+        ..color = strokeColor,
     );
   }
 
   @override
   bool shouldRepaint(covariant _WavePainter old) =>
-      old.progress != progress || old.resting != resting || old.paused != paused || old.phase != phase;
+      old.progress != progress ||
+      old.resting != resting ||
+      old.paused != paused ||
+      old.finished != finished ||
+      old.phase != phase ||
+      old.light != light;
 }
 
 /// 番茄视觉：

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -26,6 +27,7 @@ String fmtClockSec(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
 
 /// 计时流程界面：专注 / 到时提醒 / 休息 / 下一个番茄开始前
+/// 布局按窗口尺寸自适应（不再固定 520 的手机版宽度），到点后番茄图形转绿。
 class TimerFlowScreen extends StatefulWidget {
   const TimerFlowScreen({super.key});
 
@@ -37,12 +39,12 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
   final _noteCtrl = TextEditingController();
   String _noteKey = '';
 
-  // ---- 顶部按钮自动隐藏（需求①：专注中隐藏返回/设置按钮，触屏点击恢复） ----
+  // ---- 顶部按钮自动隐藏（专注中隐藏返回/设置按钮，触屏点击恢复） ----
   bool _chromeVisible = true;
   Timer? _hideTimer;
   static const _chromeHideDelay = Duration(seconds: 3);
 
-  // ---- 防烧屏位置移动（需求③：静止 10 秒 → 线性平移一下 → 再静止 10 秒） ----
+  // ---- 防烧屏位置移动（静止 10 秒 → 线性平移一下 → 再静止 10 秒） ----
   double _burnInDy = 0; // 当前纵向偏移
   Timer? _burnInTimer; // 每 10 秒触发一次移动
   Animation<double>? _burnInMove; // 本次移动的插值
@@ -158,9 +160,12 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
     final isBreak = s.phase == SessionPhase.shortBreak || s.phase == SessionPhase.longBreak;
     final isFocus = s.phase == SessionPhase.focus;
     final isPreStart = s.phase == SessionPhase.preStart;
+    final focusEnded = isFocus && s.ended; // 番茄到点：图形转绿、提示更明显
     final bg = isBreak ? AppColors.breakBg : AppColors.focusBg;
-    final accent = isBreak ? AppColors.green : AppColors.red;
+    final accent = (isBreak || focusEnded) ? AppColors.green : AppColors.red;
     final paused = s.isPaused;
+    // Windows 自定义标题栏高 40，到点浮层不盖它，关闭/最小化/置顶仍可点
+    final titleBarH = Platform.isWindows ? 40.0 : 0.0;
 
     // 顶部按钮自动隐藏 / 防烧屏状态
     final autoHide = _isFocusRunning(s);
@@ -188,301 +193,392 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
     // 顶部徽章状态
     final (String badgeText, Color badgeBg, Color badgeFg, Color badgeDot) = paused
         ? ('已暂停', AppColors.amberLight, AppColors.amberDark, AppColors.amber)
-        : isFocus
-            ? ('专注中', AppColors.redLight, AppColors.red, AppColors.red)
-            : isBreak
-                ? (s.phase == SessionPhase.shortBreak ? '短休息' : '长休息', AppColors.greenLight, AppColors.green, AppColors.green)
-                : ('休息结束', AppColors.greenLight, AppColors.green, AppColors.green);
+        : focusEnded
+            ? ('已完成', AppColors.greenLight, AppColors.green, AppColors.green)
+            : isFocus
+                ? ('专注中', AppColors.redLight, AppColors.red, AppColors.red)
+                : isBreak
+                    ? (s.phase == SessionPhase.shortBreak ? '短休息' : '长休息', AppColors.greenLight, AppColors.green, AppColors.green)
+                    : ('休息结束', AppColors.greenLight, AppColors.green, AppColors.green);
 
     return Scaffold(
       backgroundColor: bg,
-      // 防烧屏浮层挂最外层：黑屏覆盖整个窗口（最大化时两侧也是全黑）
       body: Stack(
         children: [
           Column(
-        children: [
-          const AppTitleBar(),
-          Expanded(
-            child: SafeArea(
-              top: false,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-            child: Stack(
-              children: [
-                // 全屏点击捕获（透明）：空白处点击也能恢复被隐藏的顶部按钮
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: _onBodyTap,
-                  ),
-                ),
-                // 内容区：窗口较矮时整体可滚动（避免重叠/溢出），够高时垂直居中
-                LayoutBuilder(
-                  builder: (ctx, cons) {
-                    final availH = cons.maxHeight;
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.zero,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: availH),
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _onBodyTap,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // 当前时间（常显，专注中显示在“专注中”上方）
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(fmtClockSec(DateTime.now()),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textMid, letterSpacing: 1.5)),
-                ),
-                // 顶栏：返回 / 阶段徽章 / 专注设置（专注中自动隐藏，触屏点击恢复）
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      child: Row(
-                        children: [
-                          Visibility(
-                            visible: chromeShown,
-                            maintainSize: true,
-                            maintainAnimation: true,
-                            maintainState: true,
-                            child: _circleBtn(icon: Icons.chevron_left, onTap: () => _onBack(context, app, s)),
-                          ),
-                          Expanded(
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(20)),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 7,
-                                      height: 7,
-                                      decoration: BoxDecoration(color: badgeDot, shape: BoxShape.circle),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(badgeText, style: TextStyle(color: badgeFg, fontSize: 12, fontWeight: FontWeight.w800)),
-                                  ],
+            children: [
+              const AppTitleBar(),
+              Expanded(
+                child: SafeArea(
+                  top: false,
+                  // 整页响应式：内容宽度、圆圈、字号都跟着窗口走
+                  child: LayoutBuilder(
+                    builder: (ctx, outer) {
+                      final W = outer.maxWidth;
+                      final H = outer.maxHeight;
+                      final wide = W >= 720;
+                      // 窄屏几乎铺满，宽屏放大但不超过 960（别把卡片拉成一条）
+                      final contentW = (W - (wide ? 48.0 : 24.0)).clamp(280.0, 960.0).toDouble();
+                      // 圆圈随可用高度与宽度自适应；窗口矮时收缩，避免整列溢出
+                      final circleSize = math.min(H * 0.46, contentW * 0.46).clamp(110.0, 380.0).toDouble();
+                      final timeSize = (circleSize * 0.24).clamp(30.0, 78.0).toDouble();
+                      // 备注 / 按钮最多 560 宽并居中，宽屏下不会拉成长条
+                      final formW = math.min(contentW, 560.0);
+                      return Center(
+                        child: SizedBox(
+                          width: contentW,
+                          height: H,
+                          child: Stack(
+                            children: [
+                              // 全屏点击捕获（透明）：空白处点击也能恢复被隐藏的顶部按钮
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onTap: _onBodyTap,
                                 ),
                               ),
-                            ),
-                          ),
-                          Visibility(
-                            visible: chromeShown,
-                            maintainSize: true,
-                            maintainAnimation: true,
-                            maintainState: true,
-                            child: _circleBtn(
-                              icon: Icons.tune,
-                              onTap: () {
-                                // 先收起备注输入框的焦点，否则关闭弹窗后键盘会重新弹出
-                                FocusManager.instance.primaryFocus?.unfocus();
-                                showFocusSettingsDialog(context);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // 水波纹计时 + 数字
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                            if (isPreStart)
-                              TomatoView(full: true, size: (availH * 0.6).clamp(120.0, 200.0))
-                            else
-                              LayoutBuilder(builder: (ctx, box) {
-                                final size = (availH < box.maxWidth ? availH : box.maxWidth) * 0.85;
-                                return WaveTimerView(progress: waveProgress, resting: isBreak, paused: paused, size: size.clamp(120.0, 240.0));
-                              }),
-                            const SizedBox(height: 20),
-                            Text(timeText,
-                                style: TextStyle(
-                                  fontSize: (availH * 0.09).clamp(30.0, 46.0),
-                                  fontWeight: FontWeight.w900,
-                                  color: paused ? AppColors.textGray : AppColors.textDark,
-                                  letterSpacing: -1,
-                                )),
-                            const SizedBox(height: 6),
-                            Text(
-                              isFocus
-                                  ? '本次第 ${s.pomodoroNo} 个番茄 · 专注任务中'
-                                  : isBreak
-                                      ? '休息也是一个番茄的一环'
-                                      : '下一个：专注 ${app.focusDurationMin} 分钟 · 第 ${s.pomodoroNo + 1} 个番茄',
-                              style: TextStyle(color: AppColors.textGray, fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                            // 当前任务名
-                            if (s.taskName.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(s.taskName,
-                                  style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w800),
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center),
+                              // 内容区：窗口较矮时整体可滚动，够高时垂直居中
+                              SingleChildScrollView(
+                                padding: EdgeInsets.zero,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minHeight: H),
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: _onBodyTap,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // 当前时间（常显，专注中显示在状态徽章上方）
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 6),
+                                          child: Text(fmtClockSec(DateTime.now()),
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                  fontSize: wide ? 17 : 15,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.textMid,
+                                                  letterSpacing: 1.5)),
+                                        ),
+                                        // 顶栏：返回 / 阶段徽章 / 专注设置
+                                        // 页内 mini 入口已移除（窗口标题栏上还有），三段严格左右对称
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                          child: Row(
+                                            children: [
+                                              Visibility(
+                                                visible: chromeShown,
+                                                maintainSize: true,
+                                                maintainAnimation: true,
+                                                maintainState: true,
+                                                child: _circleBtn(icon: Icons.chevron_left, onTap: () => _onBack(context, app, s)),
+                                              ),
+                                              Expanded(
+                                                child: Center(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                                    decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(20)),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Container(
+                                                          width: 7,
+                                                          height: 7,
+                                                          decoration: BoxDecoration(color: badgeDot, shape: BoxShape.circle),
+                                                        ),
+                                                        const SizedBox(width: 6),
+                                                        Text(badgeText,
+                                                            style: TextStyle(color: badgeFg, fontSize: wide ? 13 : 12, fontWeight: FontWeight.w800)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              Visibility(
+                                                visible: chromeShown,
+                                                maintainSize: true,
+                                                maintainAnimation: true,
+                                                maintainState: true,
+                                                child: _circleBtn(
+                                                  icon: Icons.tune,
+                                                  onTap: () {
+                                                    // 先收起备注输入框的焦点，否则关闭弹窗后键盘会重新弹出
+                                                    FocusManager.instance.primaryFocus?.unfocus();
+                                                    showFocusSettingsDialog(context);
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // 水波纹计时 + 数字
+                                        Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (isPreStart)
+                                              TomatoView(full: true, size: circleSize)
+                                            else
+                                              WaveTimerView(
+                                                progress: waveProgress,
+                                                resting: isBreak,
+                                                paused: paused,
+                                                finished: focusEnded,
+                                                size: circleSize,
+                                              ),
+                                            SizedBox(height: wide ? 26 : 20),
+                                            Text(timeText,
+                                                style: TextStyle(
+                                                  fontSize: timeSize,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: paused ? AppColors.textGray : AppColors.textDark,
+                                                  letterSpacing: -1,
+                                                )),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              isFocus
+                                                  ? '本次第 ${s.pomodoroNo} 个番茄 · 专注任务中'
+                                                  : isBreak
+                                                      ? '休息也是一个番茄的一环'
+                                                      : '下一个：专注 ${app.focusDurationMin} 分钟 · 第 ${s.pomodoroNo + 1} 个番茄',
+                                              style: TextStyle(
+                                                  color: AppColors.textGray,
+                                                  fontSize: wide ? 14 : 12,
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                            // 当前任务名
+                                            if (s.taskName.isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              Text(s.taskName,
+                                                  style: TextStyle(
+                                                      color: AppColors.textDark,
+                                                      fontSize: wide ? 17 : 14,
+                                                      fontWeight: FontWeight.w800),
+                                                  overflow: TextOverflow.ellipsis,
+                                                  textAlign: TextAlign.center),
+                                            ],
+                                          ],
+                                        ),
+                                        // 周期圆点 + 任务进度
+                                        // 有任务：圆点数量跟随预估番茄数；无预估模式则只显示已完成数
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 12),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              ...() {
+                                                final t = app.currentTask;
+                                                if (t != null) {
+                                                  final noEst = app.settings.noEstimate || t.estimated <= 0;
+                                                  final total = noEst
+                                                      ? t.completed
+                                                      : math.max(t.estimated, t.completed).clamp(1, 24).toInt();
+                                                  return List.generate(total, (i) {
+                                                    final filled = i < t.completed;
+                                                    return Padding(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                                                      child: Icon(Icons.circle, size: wide ? 12 : 10, color: filled ? accent : AppColors.slate300),
+                                                    );
+                                                  });
+                                                }
+                                                return List.generate(app.settings.longBreakEvery, (i) {
+                                                  final filled = i < app.cycleProgress;
+                                                  return Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                                                    child: Icon(Icons.circle, size: wide ? 12 : 10, color: filled ? accent : AppColors.slate300),
+                                                  );
+                                                });
+                                              }(),
+                                              const SizedBox(width: 8),
+                                              Builder(builder: (_) {
+                                                final t = app.currentTask;
+                                                final noEst = t != null && (app.settings.noEstimate || t.estimated <= 0);
+                                                return Text(
+                                                  t == null
+                                                      ? '每 ${app.settings.longBreakEvery} 个番茄后长休息'
+                                                      : noEst
+                                                          ? '${t.name} · 已完成 ${t.completed} 个'
+                                                          : '${t.name} · 已完成 ${t.completed}/${t.estimated} 个',
+                                                  style: TextStyle(
+                                                      fontSize: wide ? 12 : 11,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: AppColors.textGray),
+                                                  overflow: TextOverflow.ellipsis,
+                                                );
+                                              }),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 14),
+                                        // 备注卡片（限宽居中）
+                                        Center(
+                                          child: SizedBox(
+                                            width: formW,
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 14),
+                                                decoration: BoxDecoration(
+                                                  // 夜间模式用深色实底，避免"白 80% 透明 + 灰字"看不清
+                                                  color: AppColors.dark ? AppColors.inputFill : Colors.white.withValues(alpha: 0.8),
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  border: Border.all(color: AppColors.cardBorder),
+                                                ),
+                                                child: TextField(
+                                                  controller: _noteCtrl,
+                                                  onChanged: app.updateNote,
+                                                  style: TextStyle(
+                                                      fontSize: wide ? 14 : 12,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: AppColors.textDark),
+                                                  decoration: InputDecoration(
+                                                    hintText: '本次专注备注（例如：完成方案第一章）',
+                                                    hintStyle: TextStyle(
+                                                      color: AppColors.dark ? AppColors.textMid : AppColors.textGray,
+                                                      fontSize: wide ? 14 : 12,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                    border: InputBorder.none,
+                                                    isDense: true,
+                                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        // 底部按钮（限宽居中）
+                                        Center(
+                                          child: SizedBox(
+                                            width: formW,
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              child: Row(
+                                                children: [
+                                                  if (isFocus) ...[
+                                                    _bigButton(label: '结束', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () => _confirmEnd(context, app, s)),
+                                                    const SizedBox(width: 12),
+                                                    paused
+                                                        ? _bigButton(label: '继续专注', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
+                                                        : _bigButton(label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
+                                                  ] else if (isBreak) ...[
+                                                    _bigButton(label: '跳过休息', bg: AppColors.greenLight, fg: AppColors.textDark, flex: 1, onTap: app.skipBreak),
+                                                    const SizedBox(width: 12),
+                                                    paused
+                                                        ? _bigButton(label: '继续休息', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
+                                                        : _bigButton(label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
+                                                  ] else ...[
+                                                    _bigButton(label: '结束专注', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () { app.quitSession(); if (context.mounted) Navigator.of(context).pop(); }),
+                                                    const SizedBox(width: 12),
+                                                    _bigButton(label: '开始下一个番茄', bg: accent, fg: Colors.white, flex: 2, onTap: app.startNextPomodoro),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
-                          ],
-                        ),
-                    // 周期圆点 + 任务进度
-                    // 有任务：圆点数量跟随任务的预估番茄数（实际超过预估时圆点随之增加）
-                    // 无任务：保持"每 N 个番茄长休息"的周期圆点
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ...() {
-                          final t = app.currentTask;
-                          if (t != null) {
-                            final total = math.max(t.estimated, t.completed).clamp(1, 24);
-                            return List.generate(total, (i) {
-                              final filled = i < t.completed;
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 3),
-                                child: Icon(Icons.circle, size: 10, color: filled ? accent : AppColors.slate300),
-                              );
-                            });
-                          }
-                          return List.generate(app.settings.longBreakEvery, (i) {
-                            final filled = i < app.cycleProgress;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 3),
-                              child: Icon(Icons.circle, size: 10, color: filled ? accent : AppColors.slate300),
-                            );
-                          });
-                        }(),
-                        const SizedBox(width: 8),
-                        Builder(builder: (_) {
-                          final t = app.currentTask;
-                          return Text(
-                            t == null
-                                ? '每 ${app.settings.longBreakEvery} 个番茄后长休息'
-                                : '${t.name} · 已完成 ${t.completed}/${t.estimated} 个',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray),
-                            overflow: TextOverflow.ellipsis,
-                          );
-                        }),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    // 备注卡片
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          // 夜间模式用深色实底，避免"白 80% 透明 + 灰字"看不清
-                          color: AppColors.dark ? AppColors.inputFill : Colors.white.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.cardBorder),
-                        ),
-                        child: TextField(
-                          controller: _noteCtrl,
-                          onChanged: app.updateNote,
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textDark),
-                          decoration: InputDecoration(
-                            hintText: '本次专注备注（例如：完成方案第一章）',
-                            hintStyle: TextStyle(
-                              color: AppColors.dark ? AppColors.textMid : AppColors.textGray,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // 底部按钮
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          if (isFocus) ...[
-                            _bigButton(label: '结束', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () => _confirmEnd(context, app, s)),
-                            const SizedBox(width: 12),
-                            paused
-                                ? _bigButton(label: '继续专注', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
-                                : _bigButton(label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
-                          ] else if (isBreak) ...[
-                            _bigButton(label: '跳过休息', bg: AppColors.greenLight, fg: AppColors.textDark, flex: 1, onTap: app.skipBreak),
-                            const SizedBox(width: 12),
-                            paused
-                                ? _bigButton(label: '继续休息', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
-                                : _bigButton(label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
-                          ] else ...[
-                            _bigButton(label: '结束专注', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () { app.quitSession(); if (context.mounted) Navigator.of(context).pop(); }),
-                            const SizedBox(width: 12),
-                            _bigButton(label: '开始下一个番茄', bg: accent, fg: Colors.white, flex: 2, onTap: app.startNextPomodoro),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                      );
+                    },
+                  ),
                 ),
-                ),
-                ),
-                );
-              },
-            ),
-                // 到时提醒浮层
-                if (isFocus && s.ended)
-                  Positioned.fill(
-                    child: ColoredBox(
-                      color: const Color(0x61000000),
-                      child: Center(
+              ),
+            ],
+          ),
+          // 到点提醒浮层：遮罩覆盖标题栏以下的整个窗口；卡片尺寸随窗口自适应
+          if (isFocus && s.ended)
+            Positioned.fill(
+              top: titleBarH,
+              child: ColoredBox(
+                color: const Color(0x61000000),
+                child: LayoutBuilder(
+                  builder: (ctx, c) {
+                    final cardW = math.min(c.maxWidth - 32, 520.0).clamp(280.0, 520.0).toDouble();
+                    final hPad = (cardW * 0.08).clamp(20.0, 40.0).toDouble();
+                    final vPad = (cardW * 0.08).clamp(26.0, 44.0).toDouble();
+                    final titleSize = (cardW * 0.062).clamp(22.0, 32.0).toDouble();
+                    final numSize = (cardW * 0.11).clamp(38.0, 58.0).toDouble();
+                    final iconBox = (cardW * 0.14).clamp(48.0, 68.0).toDouble();
+                    final iconSize = (cardW * 0.08).clamp(28.0, 38.0).toDouble();
+                    final subSize = (cardW * 0.032).clamp(12.0, 15.0).toDouble();
+                    final btnPad = (cardW * 0.035).clamp(13.0, 18.0).toDouble();
+                    final btnSize = (cardW * 0.04).clamp(15.0, 20.0).toDouble();
+                    return Center(
+                      child: SingleChildScrollView(
                         child: SoftCard(
                           margin: EdgeInsets.zero,
-                          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('番茄时间已结束', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                              const SizedBox(height: 16),
-                              Text('- ${fmtSec(app.overtimeSec)}', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: AppColors.red)),
-                              const SizedBox(height: 20),
-                              GestureDetector(
-                                onTap: app.startBreak,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.green,
-                                    borderRadius: BorderRadius.circular(14),
-                                    boxShadow: const [BoxShadow(color: Color(0x294EBA8E), blurRadius: 10, offset: Offset(0, 3))],
+                          padding: EdgeInsets.symmetric(vertical: vPad, horizontal: hPad),
+                          child: SizedBox(
+                            width: cardW - hPad * 2,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: iconBox,
+                                  height: iconBox,
+                                  decoration: BoxDecoration(color: AppColors.greenLight, borderRadius: BorderRadius.circular(20)),
+                                  // 用已在项目中使用过的 Icons.check，避免新增图标被字体裁剪产物漏掉
+                                  child: Icon(Icons.check, color: AppColors.green, size: iconSize),
+                                ),
+                                const SizedBox(height: 14),
+                                Text('番茄时间已结束',
+                                    style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.w800, color: AppColors.textDark)),
+                                const SizedBox(height: 6),
+                                Text('这一轮完成啦，起来活动一下吧',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: subSize, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+                                const SizedBox(height: 16),
+                                Text('- ${fmtSec(app.overtimeSec)}',
+                                    style: TextStyle(fontSize: numSize, fontWeight: FontWeight.w900, color: AppColors.green)),
+                                const SizedBox(height: 22),
+                                GestureDetector(
+                                  onTap: app.startBreak,
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: EdgeInsets.symmetric(vertical: btnPad),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.green,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: const [BoxShadow(color: Color(0x294EBA8E), blurRadius: 12, offset: Offset(0, 4))],
+                                    ),
+                                    child: Text('开始休息',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.white, fontSize: btnSize, fontWeight: FontWeight.bold)),
                                   ),
-                                  child: const Text('开始休息', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              // 误开计时（忘记关闭）时的出口：不计入任何统计
-                              GestureDetector(
-                                onTap: () => _confirmDiscard(context, app),
-                                behavior: HitTestBehavior.opaque,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  child: Text('误开的计时？丢弃这个番茄',
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+                                const SizedBox(height: 12),
+                                // 误开计时（忘记关闭）时的出口：不计入任何统计
+                                GestureDetector(
+                                  onTap: () => _confirmDiscard(context, app),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    child: Text('误开的计时？丢弃这个番茄',
+                                        style: TextStyle(
+                                            fontSize: subSize,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textGray)),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-              ],
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
-            ),
-          ],
-        ),
-          // 防烧屏黑屏浮层（需求③）：纯黑背景（无视夜间模式），仅保留倒计时，
-          // 内容每 10 秒上下线性平移；点击屏幕恢复正常界面。挂在最外层保证最大化时全窗覆盖。
+          // 防烧屏黑屏浮层：纯黑背景（无视夜间模式），仅保留倒计时，
+          // 内容每 10 秒上下线性平移；点击屏幕恢复正常界面。挂最外层保证最大化时全窗覆盖。
           if (burnIn)
             Positioned.fill(
               child: GestureDetector(
@@ -663,31 +759,31 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
         child: Container(
           width: 320,
           padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: AppColors.card, // 实色打底，防止渐变透明导致透底
-                          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: AppColors.modalGradient),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: AppColors.cardBorder),
-                          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 40, offset: Offset(0, 16))],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // 番茄图标块
-                            Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(color: AppColors.redBg, borderRadius: BorderRadius.circular(16)),
-                              child: Center(child: TomatoView(full: true, size: 34)),
-                            ),
-                            const SizedBox(height: 12),
-                            Text('结束本次番茄？', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                            const SizedBox(height: 8),
-                            Text(
-                              '可以选择记录本次番茄（按实际已专注时长），或放弃本次。',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 12, color: AppColors.textMid, height: 1.6),
-                            ),
+          decoration: BoxDecoration(
+            color: AppColors.card, // 实色打底，防止渐变透明导致透底
+            gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: AppColors.modalGradient),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.cardBorder),
+            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 40, offset: Offset(0, 16))],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 番茄图标块
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(color: AppColors.redBg, borderRadius: BorderRadius.circular(16)),
+                child: Center(child: TomatoView(full: true, size: 34)),
+              ),
+              const SizedBox(height: 12),
+              Text('结束本次番茄？', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
+              const SizedBox(height: 8),
+              Text(
+                '可以选择记录本次番茄（按实际已专注时长），或放弃本次。',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.textMid, height: 1.6),
+              ),
               const SizedBox(height: 22),
               // 记录一个番茄（未到时：记录后继续进入休息，留在计时页）
               GestureDetector(
