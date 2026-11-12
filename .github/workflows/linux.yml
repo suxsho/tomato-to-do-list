@@ -20,7 +20,11 @@ jobs:
       - name: Install Linux build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libmpv-dev zenity file
+          # libgstreamer1.0-dev 依赖 libunwind-dev，但 runner 镜像里预装的 libunwind
+          # 与 jammy 源的版本对不上，和其余包一起装时 apt 解不出方案。
+          # 先单独把这个依赖装掉（必要时允许降级），再装剩下的。
+          sudo apt-get install -y libunwind-dev || sudo apt-get install -y --allow-downgrades libunwind-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev zenity file
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
