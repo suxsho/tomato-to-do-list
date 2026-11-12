@@ -63,6 +63,7 @@ jobs:
           cp linux/packaging/AppRun "$APPDIR/AppRun"
           cp linux/packaging/tomato_timer.desktop "$APPDIR/tomato_timer.desktop"
           cp assets/icon/tomato_256.png "$APPDIR/tomato_timer.png"
+          sed -i 's/\r$//' "$APPDIR/AppRun"
           chmod +x "$APPDIR/AppRun"
           wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage

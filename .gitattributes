@@ -1,0 +1,26 @@
+# 统一换行符策略
+* text=auto
+
+# Linux 下必须 LF 的文件（CRLF 会导致 shell 脚本无法执行）
+*.sh text eol=lf
+*.bash text eol=lf
+AppRun text eol=lf
+*.desktop text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+
+# Windows 专用，保持 CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.rc text eol=crlf
+
+# 二进制，不做任何转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.wav binary
+*.ttf binary
+*.otf binary
+web版需求.docx binary
