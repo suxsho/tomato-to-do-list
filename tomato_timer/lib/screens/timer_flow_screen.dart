@@ -216,14 +216,22 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                     builder: (ctx, outer) {
                       final W = outer.maxWidth;
                       final H = outer.maxHeight;
-                      final wide = W >= 720;
-                      // 窄屏几乎铺满，宽屏放大但不超过 960（别把卡片拉成一条）
-                      final contentW = (W - (wide ? 48.0 : 24.0)).clamp(280.0, 960.0).toDouble();
-                      // 圆圈随可用高度与宽度自适应；窗口矮时收缩，避免整列溢出
-                      final circleSize = math.min(H * 0.46, contentW * 0.46).clamp(110.0, 380.0).toDouble();
-                      final timeSize = (circleSize * 0.24).clamp(30.0, 78.0).toDouble();
+                      // ---- 整页等比缩放 ----
+                      // 设计版面按 820×780 的参考尺寸画，再整体缩放到当前窗口：
+                      // 宽高都不够时一起缩，够大时一起放大（上限 1.3，别把圆圈撑爆），
+                      // 这样无论窗口被拉成多扁，整页都能完整塞进去，不需要下滑。
+                      final sideGap = W >= 720 ? 48.0 : 16.0;
+                      final usableW = math.max(W - sideGap, 240.0);
+                      // 用户在设置里调过字体大小（1.15 倍等）时文字会变高，先预留这部分高度
+                      final ts = MediaQuery.textScalerOf(context).scale(1.0);
+                      final needH = 780.0 + 220.0 * (ts - 1.0);
+                      final sc = math.min(usableW / 820.0, H / needH).clamp(0.55, 1.30).toDouble();
+                      double sz(double v) => v * sc; // 设计稿尺寸 → 当前窗口尺寸
+                      final contentW = math.min(usableW, 980.0);
+                      final circleSize = sz(300);
+                      final timeSize = sz(72);
                       // 备注 / 按钮最多 560 宽并居中，宽屏下不会拉成长条
-                      final formW = math.min(contentW, 560.0);
+                      final formW = math.min(contentW, sz(560));
                       return Center(
                         child: SizedBox(
                           width: contentW,
@@ -250,19 +258,19 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                       children: [
                                         // 当前时间（常显，专注中显示在状态徽章上方）
                                         Padding(
-                                          padding: const EdgeInsets.only(bottom: 6),
+                                          padding: EdgeInsets.only(bottom: sz(6)),
                                           child: Text(fmtClockSec(DateTime.now()),
                                               textAlign: TextAlign.center,
                                               style: TextStyle(
-                                                  fontSize: wide ? 17 : 15,
+                                                  fontSize: sz(17),
                                                   fontWeight: FontWeight.w700,
                                                   color: AppColors.textMid,
-                                                  letterSpacing: 1.5)),
+                                                  letterSpacing: sz(1.5))),
                                         ),
                                         // 顶栏：返回 / 阶段徽章 / 专注设置
                                         // 页内 mini 入口已移除（窗口标题栏上还有），三段严格左右对称
                                         Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                          padding: EdgeInsets.symmetric(horizontal: sz(16), vertical: sz(10)),
                                           child: Row(
                                             children: [
                                               Visibility(
@@ -270,24 +278,24 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                 maintainSize: true,
                                                 maintainAnimation: true,
                                                 maintainState: true,
-                                                child: _circleBtn(icon: Icons.chevron_left, onTap: () => _onBack(context, app, s)),
+                                                child: _circleBtn(sc: sc, icon: Icons.chevron_left, onTap: () => _onBack(context, app, s)),
                                               ),
                                               Expanded(
                                                 child: Center(
                                                   child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                                    decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(20)),
+                                                    padding: EdgeInsets.symmetric(horizontal: sz(16), vertical: sz(6)),
+                                                    decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(sz(20))),
                                                     child: Row(
                                                       mainAxisSize: MainAxisSize.min,
                                                       children: [
                                                         Container(
-                                                          width: 7,
-                                                          height: 7,
+                                                          width: sz(7),
+                                                          height: sz(7),
                                                           decoration: BoxDecoration(color: badgeDot, shape: BoxShape.circle),
                                                         ),
-                                                        const SizedBox(width: 6),
+                                                        SizedBox(width: sz(6)),
                                                         Text(badgeText,
-                                                            style: TextStyle(color: badgeFg, fontSize: wide ? 13 : 12, fontWeight: FontWeight.w800)),
+                                                            style: TextStyle(color: badgeFg, fontSize: sz(13), fontWeight: FontWeight.w800)),
                                                       ],
                                                     ),
                                                   ),
@@ -299,6 +307,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                 maintainAnimation: true,
                                                 maintainState: true,
                                                 child: _circleBtn(
+                                                  sc: sc,
                                                   icon: Icons.tune,
                                                   onTap: () {
                                                     // 先收起备注输入框的焦点，否则关闭弹窗后键盘会重新弹出
@@ -324,7 +333,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                 finished: focusEnded,
                                                 size: circleSize,
                                               ),
-                                            SizedBox(height: wide ? 26 : 20),
+                                            SizedBox(height: sz(26)),
                                             Text(timeText,
                                                 style: TextStyle(
                                                   fontSize: timeSize,
@@ -332,7 +341,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                   color: paused ? AppColors.textGray : AppColors.textDark,
                                                   letterSpacing: -1,
                                                 )),
-                                            const SizedBox(height: 6),
+                                            SizedBox(height: sz(6)),
                                             Text(
                                               isFocus
                                                   ? '本次第 ${s.pomodoroNo} 个番茄 · 专注任务中'
@@ -341,16 +350,16 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                       : '下一个：专注 ${app.focusDurationMin} 分钟 · 第 ${s.pomodoroNo + 1} 个番茄',
                                               style: TextStyle(
                                                   color: AppColors.textGray,
-                                                  fontSize: wide ? 14 : 12,
+                                                  fontSize: sz(14),
                                                   fontWeight: FontWeight.w600),
                                             ),
                                             // 当前任务名
                                             if (s.taskName.isNotEmpty) ...[
-                                              const SizedBox(height: 6),
+                                              SizedBox(height: sz(6)),
                                               Text(s.taskName,
                                                   style: TextStyle(
                                                       color: AppColors.textDark,
-                                                      fontSize: wide ? 17 : 14,
+                                                      fontSize: sz(17),
                                                       fontWeight: FontWeight.w800),
                                                   overflow: TextOverflow.ellipsis,
                                                   textAlign: TextAlign.center),
@@ -360,7 +369,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                         // 周期圆点 + 任务进度
                                         // 有任务：圆点数量跟随预估番茄数；无预估模式则只显示已完成数
                                         Padding(
-                                          padding: const EdgeInsets.only(top: 12),
+                                          padding: EdgeInsets.only(top: sz(12)),
                                           child: Row(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
@@ -374,20 +383,20 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                   return List.generate(total, (i) {
                                                     final filled = i < t.completed;
                                                     return Padding(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                                                      child: Icon(Icons.circle, size: wide ? 12 : 10, color: filled ? accent : AppColors.slate300),
+                                                      padding: EdgeInsets.symmetric(horizontal: sz(3)),
+                                                      child: Icon(Icons.circle, size: sz(12), color: filled ? accent : AppColors.slate300),
                                                     );
                                                   });
                                                 }
                                                 return List.generate(app.settings.longBreakEvery, (i) {
                                                   final filled = i < app.cycleProgress;
                                                   return Padding(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                                                    child: Icon(Icons.circle, size: wide ? 12 : 10, color: filled ? accent : AppColors.slate300),
+                                                    padding: EdgeInsets.symmetric(horizontal: sz(3)),
+                                                    child: Icon(Icons.circle, size: sz(12), color: filled ? accent : AppColors.slate300),
                                                   );
                                                 });
                                               }(),
-                                              const SizedBox(width: 8),
+                                              SizedBox(width: sz(8)),
                                               Builder(builder: (_) {
                                                 final t = app.currentTask;
                                                 final noEst = t != null && (app.settings.noEstimate || t.estimated <= 0);
@@ -398,7 +407,7 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                           ? '${t.name} · 已完成 ${t.completed} 个'
                                                           : '${t.name} · 已完成 ${t.completed}/${t.estimated} 个',
                                                   style: TextStyle(
-                                                      fontSize: wide ? 12 : 11,
+                                                      fontSize: sz(12),
                                                       fontWeight: FontWeight.w600,
                                                       color: AppColors.textGray),
                                                   overflow: TextOverflow.ellipsis,
@@ -407,76 +416,76 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(height: 14),
+                                        SizedBox(height: sz(14)),
                                         // 备注卡片（限宽居中）
                                         Center(
                                           child: SizedBox(
                                             width: formW,
                                             child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              padding: EdgeInsets.symmetric(horizontal: sz(16)),
                                               child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 14),
+                                                padding: EdgeInsets.symmetric(horizontal: sz(14)),
                                                 decoration: BoxDecoration(
                                                   // 夜间模式用深色实底，避免"白 80% 透明 + 灰字"看不清
                                                   color: AppColors.dark ? AppColors.inputFill : Colors.white.withValues(alpha: 0.8),
-                                                  borderRadius: BorderRadius.circular(16),
+                                                  borderRadius: BorderRadius.circular(sz(16)),
                                                   border: Border.all(color: AppColors.cardBorder),
                                                 ),
                                                 child: TextField(
                                                   controller: _noteCtrl,
                                                   onChanged: app.updateNote,
                                                   style: TextStyle(
-                                                      fontSize: wide ? 14 : 12,
+                                                      fontSize: sz(14),
                                                       fontWeight: FontWeight.w500,
                                                       color: AppColors.textDark),
                                                   decoration: InputDecoration(
                                                     hintText: '本次专注备注（例如：完成方案第一章）',
                                                     hintStyle: TextStyle(
                                                       color: AppColors.dark ? AppColors.textMid : AppColors.textGray,
-                                                      fontSize: wide ? 14 : 12,
+                                                      fontSize: sz(14),
                                                       fontWeight: FontWeight.w500,
                                                     ),
                                                     border: InputBorder.none,
                                                     isDense: true,
-                                                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                                                    contentPadding: EdgeInsets.symmetric(vertical: sz(12)),
                                                   ),
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 12),
+                                        SizedBox(height: sz(12)),
                                         // 底部按钮（限宽居中）
                                         Center(
                                           child: SizedBox(
                                             width: formW,
                                             child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              padding: EdgeInsets.symmetric(horizontal: sz(16)),
                                               child: Row(
                                                 children: [
                                                   if (isFocus) ...[
-                                                    _bigButton(label: '结束', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () => _confirmEnd(context, app, s)),
-                                                    const SizedBox(width: 12),
+                                                    _bigButton(sc: sc, label: '结束', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () => _confirmEnd(context, app, s)),
+                                                    SizedBox(width: sz(12)),
                                                     paused
-                                                        ? _bigButton(label: '继续专注', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
-                                                        : _bigButton(label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
+                                                        ? _bigButton(sc: sc, label: '继续专注', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
+                                                        : _bigButton(sc: sc, label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
                                                   ] else if (isBreak) ...[
-                                                    _bigButton(label: '跳过休息', bg: AppColors.greenLight, fg: AppColors.textDark, flex: 1, onTap: app.skipBreak),
-                                                    const SizedBox(width: 12),
+                                                    _bigButton(sc: sc, label: '跳过休息', bg: AppColors.greenLight, fg: AppColors.textDark, flex: 1, onTap: app.skipBreak),
+                                                    SizedBox(width: sz(12)),
                                                     paused
-                                                        ? _bigButton(label: '继续休息', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
-                                                        : _bigButton(label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
+                                                        ? _bigButton(sc: sc, label: '继续休息', bg: AppColors.amber, fg: Colors.white, flex: 2, onTap: app.togglePause, shadow: const Color(0x55F59E0B))
+                                                        : _bigButton(sc: sc, label: '暂停', bg: accent, fg: Colors.white, flex: 2, onTap: app.togglePause),
                                                   ] else ...[
-                                                    _bigButton(label: '结束专注', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () { app.quitSession(); if (context.mounted) Navigator.of(context).pop(); }),
-                                                    const SizedBox(width: 12),
-                                                    _bigButton(label: '开始下一个番茄', bg: accent, fg: Colors.white, flex: 2, onTap: app.startNextPomodoro),
+                                                    _bigButton(sc: sc, label: '结束专注', bg: AppColors.slate100, fg: AppColors.textDark, flex: 1, onTap: () { app.quitSession(); if (context.mounted) Navigator.of(context).pop(); }),
+                                                    SizedBox(width: sz(12)),
+                                                    _bigButton(sc: sc, label: '开始下一个番茄', bg: accent, fg: Colors.white, flex: 2, onTap: app.startNextPomodoro),
                                                   ],
                                                 ],
                                               ),
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 16),
+                                        SizedBox(height: sz(16)),
                                       ],
                                     ),
                                   ),
@@ -641,36 +650,36 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
     );
   }
 
-  Widget _circleBtn({required IconData icon, required VoidCallback onTap}) {
+  Widget _circleBtn({required double sc, required IconData icon, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 36,
-        height: 36,
+        width: 36 * sc,
+        height: 36 * sc,
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.cardBorder),
           boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 6, offset: Offset(0, 2))],
         ),
-        child: Icon(icon, size: 18, color: AppColors.textMid),
+        child: Icon(icon, size: 18 * sc, color: AppColors.textMid),
       ),
     );
   }
 
-  Widget _bigButton({required String label, required Color bg, required Color fg, required int flex, required VoidCallback onTap, Color? shadow}) {
+  Widget _bigButton({required double sc, required String label, required Color bg, required Color fg, required int flex, required VoidCallback onTap, Color? shadow}) {
     return Expanded(
       flex: flex,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 15),
+          padding: EdgeInsets.symmetric(vertical: 15 * sc),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(16 * sc),
             boxShadow: shadow != null ? [BoxShadow(color: shadow, blurRadius: 10, offset: const Offset(0, 3))] : null,
           ),
-          child: Text(label, textAlign: TextAlign.center, style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.bold)),
+          child: Text(label, textAlign: TextAlign.center, style: TextStyle(color: fg, fontSize: 13 * sc, fontWeight: FontWeight.bold)),
         ),
       ),
     );
