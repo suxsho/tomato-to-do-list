@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# 创建 Release 并上传附件需要写权限，默认的 GITHUB_TOKEN 是只读的
+permissions:
+  contents: write
+
 defaults:
   run:
     working-directory: tomato_timer
