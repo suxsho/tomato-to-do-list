@@ -43,13 +43,24 @@
 
 ## 下载
 
+最新版本：[**v0.5.0**](https://github.com/suxsho/tomato-to-do-list/releases/latest)
+
 | 平台 | 产物 | 获取方式 |
 |---|---|---|
+| Windows | `.zip`（解压即用，无需安装） | [Releases](https://github.com/suxsho/tomato-to-do-list/releases) |
+| Android | `.apk` | [Releases](https://github.com/suxsho/tomato-to-do-list/releases) |
 | Linux | `.AppImage` / `.tar.gz` | [Releases](https://github.com/suxsho/tomato-to-do-list/releases) |
-| Windows | `.exe` | 本地执行 `build_windows.ps1` |
-| Android | `.apk` | 本地执行 `build_android.ps1` |
+
+| 文件 | 大小 | 说明 |
+|---|---|---|
+| `tomato_timer-0.5.0-windows-x64.zip` | 11.9 MB | 解压后运行 `tomato_timer.exe` |
+| `tomato_timer-0.5.0-android.apk` | 51.5 MB | 支持 Android 5.0+，正式密钥签名 |
+| `tomato_timer-0.5.0-linux-x86_64.AppImage` | 9.8 MB | 单文件，`chmod +x` 后双击运行 |
+| `tomato_timer-0.5.0-linux-x64.tar.gz` | 9.7 MB | 解压即用，适合装到 `/opt` |
 
 Linux 包由 GitHub Actions 在 Ubuntu 上自动构建，**不要**在 Windows 上试图直接构建 Linux 版（缺少 clang / cmake / ninja / GTK 开发库）。
+
+想要自己构建的话，Windows / Android 可在本地执行 `build_windows.ps1` / `build_android.ps1`，详见[从源码构建](#从源码构建)。
 
 ### Linux 运行依赖
 
@@ -70,22 +81,37 @@ sudo dnf install gstreamer1 gstreamer1-plugins-base zenity
 前置：Flutter 3.47 或更高版本。
 
 ```bash
-cd tomato_timer
+git clone https://github.com/suxsho/tomato-to-do-list.git
+cd tomato-to-do-list/tomato_timer
 flutter pub get
 ```
 
-```powershell
-# Windows
-.\build_windows.ps1
-```
+### Windows
 
 ```powershell
-# Android
-.\build_android.ps1
+.\build_windows.ps1
+# 产物：build\windows\x64\runner\Release\
 ```
+
+### Android
+
+```powershell
+.\build_android.ps1                    # 构建 release APK
+.\build_android.ps1 -Aab               # 构建 AAB（应用商店）
+.\build_android.ps1 -Version 0.6.0+8   # 先写入版本号再构建
+```
+
+产物：`build\app\outputs\flutter-apk\app-release.apk`
+
+> **签名说明**：正式版需要 `android/key.properties` 与对应 keystore（均不入库）。
+> 仓库里没有这些文件，`build.gradle.kts` 会自动回退到 debug 签名以便编译通过。
+> 自己用没问题，但**不能用于覆盖安装官方版**——签名不同，Android 会拒绝升级。
+
+### Linux
+
+需在 Linux 环境下构建：
 
 ```bash
-# Linux（需在 Linux 环境下）
 flutter build linux --release
 # 产物：build/linux/x64/release/bundle/
 ```
@@ -101,14 +127,21 @@ git push github v0.5.0   # tag 会自动附加到 Release
 
 工作流定义见 [`.github/workflows/linux.yml`](.github/workflows/linux.yml)，同时产出 AppImage 和 tar.gz 两种格式。
 
+> Windows 与 Android 的包需本地构建后手动上传到 Release（GitHub 的 Windows runner 与 macOS runner
+> 也可构建，但当前工作流只做 Linux，以控制构建时长）。
+
 ---
 
 ## 项目结构
 
 ```
 .
-├── .github/workflows/linux.yml   # Linux 自动构建
+├── .github/workflows/linux.yml   # Linux 自动构建（AppImage + tar.gz）
+├── LICENSE                       # AGPL-3.0
+├── README.md
 ├── tomato_timer/                 # Flutter 工程
+│   ├── build_windows.ps1         # Windows 打包脚本
+│   ├── build_android.ps1         # Android 打包脚本（APK / AAB）
 │   ├── lib/
 │   │   ├── app_state.dart        # 核心状态机：阶段流转、计时、记录、同步
 │   │   ├── models.dart           # 任务 / 专注记录数据结构
