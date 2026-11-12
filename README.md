@@ -6,9 +6,7 @@
 
 界面走的是「一个圆圈 + 一条水位」的极简路线：当前阶段一眼可见，不做花哨的动画堆砌。
 
-<img width="1668" height="833" alt="image" src="https://github.com/user-attachments/assets/b8933aa1-ebc9-448c-843f-a103ff54b0e4" />
-
----
+<img width="1676" height="836" alt="ac9ff24b-f80e-4922-8e53-8eb6f703410a" src="https://github.com/user-attachments/assets/6ca58d4f-b237-46f3-81eb-344a41546944" />
 
 ## 功能
 
@@ -23,7 +21,7 @@
 - 长按排序、勾选完成
 - 进行中的任务在卡片上有明确标识
 
-<img width="1676" height="836" alt="ac9ff24b-f80e-4922-8e53-8eb6f703410a" src="https://github.com/user-attachments/assets/6ca58d4f-b237-46f3-81eb-344a41546944" />
+<img width="1668" height="833" alt="image" src="https://github.com/user-attachments/assets/b8933aa1-ebc9-448c-843f-a103ff54b0e4" />
 
 
 **迷你小窗**
