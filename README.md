@@ -6,6 +6,8 @@
 
 界面走的是「一个圆圈 + 一条水位」的极简路线：当前阶段一眼可见，不做花哨的动画堆砌。
 
+<img width="1668" height="833" alt="image" src="https://github.com/user-attachments/assets/b8933aa1-ebc9-448c-843f-a103ff54b0e4" />
+
 ---
 
 ## 功能
@@ -21,9 +23,15 @@
 - 长按排序、勾选完成
 - 进行中的任务在卡片上有明确标识
 
+<img width="1657" height="820" alt="image" src="https://github.com/user-attachments/assets/457a0ba7-db13-41c5-9191-ce5531ba3ee2" />
+
+
 **迷你小窗**
 - 可切换到圆形小窗模式，贴边显示剩余时间，一直挂在前台
 - 支持系统级屏幕常亮，防烧屏处理
+
+<img width="210" height="210" alt="image" src="https://github.com/user-attachments/assets/e6216178-b96d-47d8-8514-763a6087460e" />
+
 
 **统计**
 - 日 / 周维度的番茄数量趋势图
