@@ -1,10 +1,13 @@
 # Flutter / Dart
 tomato_timer/build/
-tomato_timer/.dart_tool/
+**/build/
+**/.dart_tool/
 tomato_timer/windows/flutter/ephemeral/
 *.iml
 *.ipr
 *.iws
+*.log
+analyze_*.txt
 .packages
 .pub-cache/
 .pub/
