@@ -23,7 +23,7 @@
 - 长按排序、勾选完成
 - 进行中的任务在卡片上有明确标识
 
-<img width="1657" height="820" alt="image" src="https://github.com/user-attachments/assets/457a0ba7-db13-41c5-9191-ce5531ba3ee2" />
+<img width="1676" height="836" alt="ac9ff24b-f80e-4922-8e53-8eb6f703410a" src="https://github.com/user-attachments/assets/6ca58d4f-b237-46f3-81eb-344a41546944" />
 
 
 **迷你小窗**
