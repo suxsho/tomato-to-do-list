@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=番茄任务清单
+Name[en]=Tomato Timer
+Comment=单机离线番茄钟
+Exec=tomato_timer
+Icon=tomato_timer
+Categories=Utility;Office;
+Terminal=false
