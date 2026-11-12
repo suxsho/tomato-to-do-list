@@ -70,9 +70,10 @@ jobs:
           cp assets/icon/tomato_256.png "$APPDIR/tomato_timer.png"
           sed -i 's/\r$//' "$APPDIR/AppRun"
           chmod +x "$APPDIR/AppRun"
-          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run "$APPDIR" "tomato_timer-$VER-linux-x86_64.AppImage"
+          wget -q -P "$RUNNER_TEMP" https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool-x86_64.AppImage"
+          # 下载到 RUNNER_TEMP，避免工具本身被 artifacts 的通配符顺手打包进去
+          ARCH=x86_64 "$RUNNER_TEMP/appimagetool-x86_64.AppImage" --appimage-extract-and-run "$APPDIR" "tomato_timer-$VER-linux-x86_64.AppImage"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
@@ -80,7 +81,7 @@ jobs:
           name: tomato-timer-linux
           path: |
             tomato_timer/build/linux/x64/release/*.tar.gz
-            tomato_timer/*.AppImage
+            tomato_timer/tomato_timer-*-linux-x86_64.AppImage
           if-no-files-found: error
 
       - name: Attach to Release
@@ -89,4 +90,4 @@ jobs:
         with:
           files: |
             tomato_timer/build/linux/x64/release/*.tar.gz
-            tomato_timer/*.AppImage
+            tomato_timer/tomato_timer-*-linux-x86_64.AppImage
