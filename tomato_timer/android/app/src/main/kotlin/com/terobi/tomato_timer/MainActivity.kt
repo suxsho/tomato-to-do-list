@@ -1,4 +1,4 @@
-package com.example.tomato_timer
+package com.terobi.tomato_timer
 
 import android.Manifest
 import android.app.Notification

@@ -31,3 +31,9 @@ Desktop.ini
 
 # 构建产物
 dist/
+
+# 安卓签名（绝不入库）
+*.jks
+*.keystore
+key.properties
+key.properties.*
