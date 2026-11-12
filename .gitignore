@@ -21,6 +21,9 @@ coverage/
 # 助手工作数据（不入库）
 .workbuddy/
 
+# 需求与设计素材（仅本地保留，不公开在开源仓库）
+参考图/
+
 # 系统文件
 Thumbs.db
 Desktop.ini
