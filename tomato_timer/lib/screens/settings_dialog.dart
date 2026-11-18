@@ -178,7 +178,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(color: AppColors.redBg, borderRadius: BorderRadius.circular(14)),
                       child: Text(
-                        '专注 ${_parse(_focusCtrl, 25, 1, 120)} 分钟 · 短休息 ${_parse(_shortCtrl, 5, 1, 60)} 分钟\n每 ${_parse(_everyCtrl, 4, 2, 12)} 个番茄后，长休息 ${_parse(_longCtrl, 30, 1, 120)} 分钟',
+                        context.read<AppState>().settings.noLongBreak
+                            ? '专注 ${_parse(_focusCtrl, 25, 1, 120)} 分钟 · 休息 ${_parse(_shortCtrl, 5, 1, 60)} 分钟\n已开启无长番茄休息：不管完成多少个番茄都只短休（下方长休设置不生效）'
+                            : '专注 ${_parse(_focusCtrl, 25, 1, 120)} 分钟 · 短休息 ${_parse(_shortCtrl, 5, 1, 60)} 分钟\n每 ${_parse(_everyCtrl, 4, 2, 12)} 个番茄后，长休息 ${_parse(_longCtrl, 30, 1, 120)} 分钟',
                         style: TextStyle(fontSize: 11, height: 1.7, fontWeight: FontWeight.w600, color: AppColors.textMid),
                       ),
                     ),

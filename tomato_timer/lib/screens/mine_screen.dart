@@ -258,7 +258,7 @@ class MineScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text('番茄任务清单', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
               const SizedBox(height: 2),
-              Text('Minimal Focus Timer v0.5.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+              Text('Minimal Focus Timer v0.6.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -278,11 +278,29 @@ class MineScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Divider(height: 1, color: AppColors.cardBorder),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('任务配番茄，专注一个接一个。本地优先、云同步可选的极简效率工具。',
-                          style: TextStyle(fontSize: 11, color: AppColors.textMid, height: 1.6)),
+                    const SizedBox(height: 10),
+                    // GitHub 开源地址（可复制）
+                    GestureDetector(
+                      onLongPress: () {
+                        Clipboard.setData(const ClipboardData(text: 'https://github.com/suxsho/tomato-to-do-list'));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('开源地址已复制')));
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(color: const Color(0xFF00AEEC), borderRadius: BorderRadius.circular(12)),
+                        child: const Column(
+                          children: [
+                            Text('GitHub 开源地址（长按复制）',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                            SizedBox(height: 2),
+                            Text('github.com/suxsho/tomato-to-do-list',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -349,7 +367,7 @@ class MineScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                child: const Text('版本 0.5.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: const Text('版本 0.6.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -363,7 +381,9 @@ class MineScreen extends StatelessWidget {
                 context,
                 Icons.timer_outlined,
                 '番茄钟设置',
-                '专注 ${app.settings.focusMin} / 短休 ${app.settings.shortBreakMin} / 长休 ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
+                app.settings.noLongBreak
+                    ? '专注 ${app.settings.focusMin} / 休息 ${app.settings.shortBreakMin} 分钟 · 无长休息'
+                    : '专注 ${app.settings.focusMin} / 短休 ${app.settings.shortBreakMin} / 长休 ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息',
                 () => showSettingsDialog(context),
                 iconColor: AppColors.red,
               ),
@@ -462,6 +482,58 @@ class MineScreen extends StatelessWidget {
             ],
           ),
         ),
+        // 无长番茄休息：不管完成多少个番茄，始终只休息 5 分钟（短休）
+        SoftCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: [
+              Icon(Icons.coffee_outlined, color: AppColors.red),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('无长番茄休息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
+                    Text('开启后不管完成多少个番茄，都只休息 ${app.settings.shortBreakMin} 分钟',
+                        style: TextStyle(fontSize: 12, color: AppColors.textGray)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: app.settings.noLongBreak,
+                activeThumbColor: Colors.white,
+                activeTrackColor: AppColors.red,
+                onChanged: (_) => app.toggleNoLongBreak(),
+              ),
+            ],
+          ),
+        ),
+        // 强制休息（仅 Windows / Linux 桌面端）：专注到点自动全屏，点按钮才解除
+        if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
+          SoftCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              children: [
+                Icon(Icons.fullscreen, color: AppColors.red),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('强制休息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
+                      Text('专注时间到自动全屏，起来活动后再解除', style: TextStyle(fontSize: 12, color: AppColors.textGray)),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: app.settings.forceRestOn,
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: AppColors.red,
+                  onChanged: (_) => app.toggleForceRest(),
+                ),
+              ],
+            ),
+          ),
         // 文件数据
         SoftCard(
           padding: const EdgeInsets.symmetric(horizontal: 4),

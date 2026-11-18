@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../force_rest.dart';
 import '../models.dart';
 import '../system_ui.dart';
 import '../theme.dart';
@@ -402,7 +403,9 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
                                                 final noEst = t != null && (app.settings.noEstimate || t.estimated <= 0);
                                                 return Text(
                                                   t == null
-                                                      ? '每 ${app.settings.longBreakEvery} 个番茄后长休息'
+                                                      ? (app.settings.noLongBreak
+                                                          ? '无长休息 · 始终短休 ${app.settings.shortBreakMin} 分钟'
+                                                          : '每 ${app.settings.longBreakEvery} 个番茄后长休息')
                                                       : noEst
                                                           ? '${t.name} · 已完成 ${t.completed} 个'
                                                           : '${t.name} · 已完成 ${t.completed}/${t.estimated} 个',
@@ -502,7 +505,8 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
             ],
           ),
           // 到点提醒浮层：遮罩覆盖标题栏以下的整个窗口；卡片尺寸随窗口自适应
-          if (isFocus && s.ended)
+          // 开启强制休息时改由全局 ForceRestOverlay 接管（含全屏解除按钮），此处不重复弹
+          if (isFocus && s.ended && !(app.settings.forceRestOn && ForceRest.supported))
             Positioned.fill(
               top: titleBarH,
               child: ColoredBox(

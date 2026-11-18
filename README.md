@@ -49,7 +49,7 @@
 
 ## 下载
 
-最新版本：[**v0.5.0**](https://github.com/suxsho/tomato-to-do-list/releases/latest)
+最新版本：[**v0.6.0**](https://github.com/suxsho/tomato-to-do-list/releases/latest)
 
 | 平台 | 产物 | 获取方式 |
 |---|---|---|
@@ -59,10 +59,10 @@
 
 | 文件 | 大小 | 说明 |
 |---|---|---|
-| `tomato_timer-0.5.0-windows-x64.zip` | 11.9 MB | 解压后运行 `tomato_timer.exe` |
-| `tomato_timer-0.5.0-android.apk` | 51.5 MB | 支持 Android 5.0+，正式密钥签名 |
-| `tomato_timer-0.5.0-linux-x86_64.AppImage` | 9.8 MB | 单文件，`chmod +x` 后双击运行 |
-| `tomato_timer-0.5.0-linux-x64.tar.gz` | 9.7 MB | 解压即用，适合装到 `/opt` |
+| `tomato_timer-0.6.0-windows-x64.zip` | 11.9 MB | 解压后运行 `tomato_timer.exe` |
+| `tomato_timer-0.6.0-android.apk` | 51.5 MB | 支持 Android 5.0+，正式密钥签名 |
+| `tomato_timer-0.6.0-linux-x86_64.AppImage` | 9.8 MB | 单文件，`chmod +x` 后双击运行 |
+| `tomato_timer-0.6.0-linux-x64.tar.gz` | 9.7 MB | 解压即用，适合装到 `/opt` |
 
 Linux 包由 GitHub Actions 在 Ubuntu 上自动构建，**不要**在 Windows 上试图直接构建 Linux 版（缺少 clang / cmake / ninja / GTK 开发库）。
 
@@ -127,8 +127,8 @@ flutter build linux --release
 推送 tag 或手动触发 GitHub Actions 即可：
 
 ```bash
-git tag v0.5.0
-git push github v0.5.0   # tag 会自动附加到 Release
+git tag v0.6.0
+git push github v0.6.0   # tag 会自动附加到 Release
 ```
 
 工作流定义见 [`.github/workflows/linux.yml`](.github/workflows/linux.yml)，同时产出 AppImage 和 tar.gz 两种格式。

@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'force_rest.dart';
 import 'models.dart';
 import 'screen_keep_on.dart';
 import 'system_notify.dart';
@@ -51,6 +52,8 @@ class AppState extends ChangeNotifier {
   Timer? _ticker;
   bool _syncing = false;
   bool? _keepOnApplied; // 上次应用的屏幕常亮状态（避免重复调用通道）
+  // 强制休息「即将全屏」提醒：每个专注段只在进入最后 60 秒时响一次
+  int? _forceRestWarnedPomoNo;
   final AudioPlayer _bellPlayer = AudioPlayer();
   final AudioPlayer _tickPlayer = AudioPlayer();
   String? _bellPath;
@@ -84,6 +87,16 @@ class AppState extends ChangeNotifier {
     _onTick();
     // 恢复未结束会话后应用屏幕常亮状态
     _applyKeepScreenOn();
+    // 重启时若正处在强制休息流程（到点待休息 / 休息中）且开了开关，补触发全屏
+    // （enter 内部幂等；浮层由 ForceRestOverlay 依据会话状态自动显示）
+    final s0 = session;
+    final inForceFlow = s0 != null &&
+        ((s0.phase == SessionPhase.focus && s0.ended) ||
+            s0.phase == SessionPhase.shortBreak ||
+            s0.phase == SessionPhase.longBreak);
+    if (settings.forceRestOn && ForceRest.supported && inForceFlow) {
+      unawaited(ForceRest.enter());
+    }
     // 系统深浅色切换时，若主题为"跟随系统"则刷新界面
     PlatformDispatcher.instance.onPlatformBrightnessChanged = () {
       if (settings.themeMode == 'system') notifyListeners();
@@ -291,8 +304,12 @@ class AppState extends ChangeNotifier {
   int get overtimeSec => math.max(0, elapsedSec - session!.durationSec);
 
   /// 下一次休息是否应该是长休息：已完成番茄数达到设定周期
+  /// 「无长番茄休息」开启时恒为 false——永远只休息 5 分钟（短休）
   bool get nextBreakIsLong =>
-      cycleDone > 0 && settings.longBreakEvery > 0 && cycleDone % settings.longBreakEvery == 0;
+      !settings.noLongBreak &&
+      cycleDone > 0 &&
+      settings.longBreakEvery > 0 &&
+      cycleDone % settings.longBreakEvery == 0;
 
   /// 当前周期内已完成的番茄数（用于界面圆点），刚凑满或长休息中显示为满格
   int get cycleProgress {
@@ -316,6 +333,8 @@ class AppState extends ChangeNotifier {
         // 自然到时：自动记录一个番茄，弹出结束提醒等待手动开始休息
         s.ended = true;
         _recordPomodoro(s.durationSec); // 内部已上传云端，无需再 _syncCloudIfAuto
+        // 强制休息：桌面端开了开关就自动全屏，解除浮层由全局 ForceRestOverlay 提供
+        if (settings.forceRestOn && ForceRest.supported) unawaited(ForceRest.enter());
         _playBell();
         _vibrate();
         flashTaskbar(); // 最小化时任务栏图标闪红提醒
@@ -328,7 +347,8 @@ class AppState extends ChangeNotifier {
         );
         _saveSession();
       } else if (s.phase == SessionPhase.shortBreak || s.phase == SessionPhase.longBreak) {
-        // 休息结束：自动进入下一个番茄开始前界面
+        // 休息结束：强制休息到这里才算真正结束，解除全屏
+        unawaited(ForceRest.exit());
         _markBreakEnded(s.durationSec); // 记录本次休息结束时间与时长
         s.phase = SessionPhase.preStart;
         s.startTs = DateTime.now().millisecondsSinceEpoch;
@@ -352,6 +372,8 @@ class AppState extends ChangeNotifier {
       if (s.phase == SessionPhase.focus && !s.ended) {
         // 专注倒计时"咔咔"声（每秒一次，暂停时不响）
         _playTick();
+        // 强制休息开启时，进入最后 60 秒提醒一次「即将自动全屏」
+        _maybeWarnForceRest(s);
       }
     }
     notifyListeners();
@@ -405,6 +427,7 @@ class AppState extends ChangeNotifier {
     if (s.phase == SessionPhase.focus) {
       if (s.ended) {
         // 已自然到时并记录过番茄：只补记超时（负计时），不重复记录
+        unawaited(ForceRest.exit());
         _applyOvertime();
         session = null;
         _saveSession();
@@ -417,10 +440,16 @@ class AppState extends ChangeNotifier {
         final actual = math.min(elapsedSec, s.durationSec);
         _recordPomodoro(actual);
         _enterBreak(s, now);
+        // 强制休息：主动记录番茄后进入休息，同样要全屏，行为与自然到点一致。
+        // 这里不 exit——进休息要保持全屏，直到休息倒计时走完由 _onTick 解除。
+        if (settings.forceRestOn && ForceRest.supported) unawaited(ForceRest.enter());
         return;
       }
+      // 未到时 + 放弃：结束会话回主界面，还原全屏
+      unawaited(ForceRest.exit());
     } else if (s.phase == SessionPhase.shortBreak || s.phase == SessionPhase.longBreak) {
       // 休息中提前结束：视为该次休息已结束，记录时间供久置重置判断
+      unawaited(ForceRest.exit());
       _markBreakEnded(s.durationSec);
     }
     session = null;
@@ -453,6 +482,7 @@ class AppState extends ChangeNotifier {
   void discardPomodoro() {
     final s = session;
     if (s == null) return;
+    unawaited(ForceRest.exit());
     if (s.phase == SessionPhase.focus && s.ended) {
       _discardLastRecord(s);
     }
@@ -485,6 +515,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// 到时提醒弹窗中点击“开始休息”
+  /// 注意：强制休息下这里不解除全屏——全屏要一直保持到休息倒计时结束，
+  /// 才由 _onTick 的休息结束分支统一解除，否则“强制”就形同虚设。
   void startBreak() {
     final s = session;
     if (s == null || s.phase != SessionPhase.focus) return;
@@ -495,6 +527,7 @@ class AppState extends ChangeNotifier {
   void skipBreak() {
     final s = session;
     if (s == null || (s.phase != SessionPhase.shortBreak && s.phase != SessionPhase.longBreak)) return;
+    unawaited(ForceRest.exit()); // 主动跳过休息：视为放弃强制休息，解除全屏
     _markBreakEnded(s.durationSec); // 跳过休息也视为该次休息结束
     s.phase = SessionPhase.preStart;
     s.startTs = DateTime.now().millisecondsSinceEpoch;
@@ -519,7 +552,8 @@ class AppState extends ChangeNotifier {
     s.durationSec = focusDurationMin * 60;
     s.ended = false;
     s.pomodoroNo += 1;
-    s.note = '';
+    // 备注跟随到下一个番茄：在「休息结束等待下一个番茄」阶段输入的内容，
+    // 要能在下一个番茄到点时被记录，这里不能再清空（清空会导致输入丢失）
     _saveSession();
     _syncCloudIfAuto();
     notifyListeners();
@@ -527,6 +561,7 @@ class AppState extends ChangeNotifier {
 
   /// “结束专注”：放弃后续流程，回到主界面
   void quitSession() {
+    unawaited(ForceRest.exit());
     session = null;
     _saveSession();
     notifyListeners();
@@ -635,6 +670,20 @@ class AppState extends ChangeNotifier {
       // 打开时发一条示例，顺便确认通知权限是否已授予
       _notifyDone(title: '通知已开启', body: '番茄到时会在通知栏提醒你');
     }
+    notifyListeners();
+  }
+
+  /// 强制休息开关（仅 Windows / Linux 桌面端可见）：专注到点自动全屏
+  void toggleForceRest() {
+    settings.forceRestOn = !settings.forceRestOn;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  /// 无长番茄休息：开启后不管完成多少个番茄都只休息 5 分钟（短休）
+  void toggleNoLongBreak() {
+    settings.noLongBreak = !settings.noLongBreak;
+    _saveSettings();
     notifyListeners();
   }
 
@@ -965,6 +1014,24 @@ class AppState extends ChangeNotifier {
     records.removeWhere((r) => r.id == id);
     _saveRecords();
     notifyListeners();
+  }
+
+  // ---------- 强制休息提前提醒 ----------
+  /// 专注进入最后 60 秒时提醒一次「即将自动全屏强制休息」，每个番茄段只提醒一次。
+  /// 用 pomodoroNo + 本段 startTs 判定，避免暂停恢复、重复 tick 造成多次提醒。
+  void _maybeWarnForceRest(Session s) {
+    if (!settings.forceRestOn || !ForceRest.supported) return;
+    if (remainingSec > 60 || remainingSec <= 0) return;
+    final stamp = s.pomodoroNo * 1000000000 + (s.startTs ~/ 1000);
+    if (_forceRestWarnedPomoNo == stamp) return;
+    _forceRestWarnedPomoNo = stamp;
+    final breakMin = nextBreakIsLong ? settings.longBreakMin : settings.shortBreakMin;
+    _notifyDone(
+      title: '即将强制休息 · 还剩 1 分钟',
+      body: '专注马上结束，随后将自动全屏强制休息 $breakMin 分钟',
+    );
+    _playBell(); // 响一次提示，区别于逐秒的"咔咔"声
+    flashTaskbar();
   }
 
   // ---------- 提示音 ----------

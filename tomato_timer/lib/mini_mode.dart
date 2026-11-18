@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -25,7 +27,8 @@ String _fmtSec(int s) {
 /// 设计取舍：不新开第二个 Flutter 窗口（多窗口需要独立 isolate，计时状态
 /// 同步成本高），而是同一个窗口切换形态。这样 AppState、导航栈、进行中的
 /// 会话全部原样保留，切回来不会丢状态。
-class MiniModeController extends ChangeNotifier with WindowListener {
+class MiniModeController extends ChangeNotifier
+    with WindowListener, ScreenListener {
   static const double windowSize = 140;
   static const double circleSize = 124;
 
@@ -43,12 +46,17 @@ class MiniModeController extends ChangeNotifier with WindowListener {
   bool _restorePinned = false;
   bool _busy = false;
   Timer? _saveTimer;
+  // 运行中屏幕布局可能变（拔插外接屏、改分辨率、切换投影模式），
+  // 低频巡检把小窗拉回可见区，不让它留在已经不存在的屏幕坐标上。
+  Timer? _guardTimer;
+  bool _checking = false;
 
   Future<void> init() async {
     if (!supported) return;
     _prefs = await SharedPreferences.getInstance();
     pinned = _prefs?.getBool(_kPin) ?? true;
     windowManager.addListener(this);
+    screenRetriever.addListener(this);
   }
 
   Future<void> enter() async {
@@ -78,10 +86,14 @@ class MiniModeController extends ChangeNotifier with WindowListener {
         final p = await windowManager.getPosition();
         await windowManager.setPosition(Offset(p.dx - 16, p.dy - 16));
       }
+      // 保存的坐标可能来自另一块更宽的屏 / 上一次的多屏布局，换到窄屏后
+      // 窗口会整个落到屏幕外（进程还在，只是看不见）。这里统一纠正一次。
+      await _ensureVisible();
       await windowManager.setAlwaysOnTop(pinned);
 
       mini = true;
       notifyListeners();
+      _startGuard();
 
       // 等 native 侧把尺寸/setBounds 落地后再裁剪，否则会裁到旧尺寸
       await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -95,6 +107,7 @@ class MiniModeController extends ChangeNotifier with WindowListener {
     if (!supported || !mini || _busy) return;
     _busy = true;
     try {
+      _stopGuard();
       await _savePosition();
       Win32Region.reset(); // 必须先解除圆形裁剪，否则放大后主界面会被裁掉
       await windowManager.setBackgroundColor(AppColors.pageBg);
@@ -133,6 +146,97 @@ class MiniModeController extends ChangeNotifier with WindowListener {
     await _prefs?.setDouble(_kY, p.dy);
   }
 
+  void _startGuard() {
+    _guardTimer?.cancel();
+    _guardTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (mini) _ensureVisible();
+    });
+  }
+
+  void _stopGuard() {
+    _guardTimer?.cancel();
+    _guardTimer = null;
+  }
+
+  /// 把小窗约束到当前屏幕的可见工作区内。
+  ///
+  /// 单位说明：window_manager 的 get/setPosition 与 screen_retriever 的
+  /// visiblePosition / visibleSize 都是逻辑像素（原生侧已按显示器 DPI 换算），
+  /// 可以直接比较，不需要再乘除 devicePixelRatio。
+  ///
+  /// 归属屏取「与窗口重叠最多」的那块；完全在屏外时取离窗口中心最近的一块。
+  /// 然后只 clamp 左上角，这样原来贴右下角的小窗换到窄屏后仍贴右下角。
+  Future<void> _ensureVisible() async {
+    if (!supported || _checking) return;
+    _checking = true;
+    try {
+      // 巡检是「尽力而为」：拿不到屏幕信息或平台调用异常时都不动窗口，
+      // 也不把异常抛给定时器回调。
+      final displays = await screenRetriever.getAllDisplays();
+      if (displays.isEmpty) return;
+
+      final p = await windowManager.getPosition();
+      final win = Rect.fromLTWH(p.dx, p.dy, windowSize, windowSize);
+      final areas = displays.map((d) {
+        final size = d.visibleSize ?? d.size;
+        final origin = d.visiblePosition ?? Offset.zero;
+        return Rect.fromLTWH(origin.dx, origin.dy, size.width, size.height);
+      }).toList();
+
+      var target = areas.first;
+      var bestOverlap = -1.0;
+      for (final a in areas) {
+        final w = math.min(win.right, a.right) - math.max(win.left, a.left);
+        final h = math.min(win.bottom, a.bottom) - math.max(win.top, a.top);
+        final overlap = (w > 0 && h > 0) ? w * h : 0.0;
+        if (overlap > bestOverlap) {
+          bestOverlap = overlap;
+          target = a;
+        }
+      }
+      // 完全落在所有屏幕之外：改选离窗口中心最近的一块屏
+      if (bestOverlap <= 0) {
+        final c = win.center;
+        var bestDist = double.infinity;
+        for (final a in areas) {
+          final dx = math.max(a.left - c.dx, math.max(0.0, c.dx - a.right));
+          final dy = math.max(a.top - c.dy, math.max(0.0, c.dy - a.bottom));
+          final dist = dx * dx + dy * dy;
+          if (dist < bestDist) {
+            bestDist = dist;
+            target = a;
+          }
+        }
+      }
+
+      const margin = 12.0;
+      double clamp(double v, double lo, double hi) =>
+          hi < lo ? lo : v.clamp(lo, hi).toDouble();
+      final nx = clamp(
+          p.dx, target.left + margin, target.right - windowSize - margin);
+      final ny = clamp(
+          p.dy, target.top + margin, target.bottom - windowSize - margin);
+      if ((nx - p.dx).abs() > 0.5 || (ny - p.dy).abs() > 0.5) {
+        await windowManager.setPosition(Offset(nx, ny));
+        // 立即落盘，不能只靠 onWindowMove：enter() 期间 mini 还是 false 会被
+        // 守卫挡掉，且程序触发的移动事件也不保证送达。下次启动（含 --mini）
+        // 直接落在正确位置。
+        await _prefs?.setDouble(_kX, nx);
+        await _prefs?.setDouble(_kY, ny);
+      }
+    } catch (_) {
+      // 屏幕信息不可用 / 平台调用失败：保持现状，等下一次巡检再试
+    } finally {
+      _checking = false;
+    }
+  }
+
+  @override
+  void onScreenEvent(String eventName) {
+    // 插拔外接屏时立即纠正，不必等下一次巡检
+    if (mini) _ensureVisible();
+  }
+
   @override
   void onWindowMove() {
     if (!mini) return;
@@ -152,7 +256,11 @@ class MiniModeController extends ChangeNotifier with WindowListener {
   @override
   void dispose() {
     _saveTimer?.cancel();
-    if (supported) windowManager.removeListener(this);
+    _stopGuard();
+    if (supported) {
+      windowManager.removeListener(this);
+      screenRetriever.removeListener(this);
+    }
     super.dispose();
   }
 }

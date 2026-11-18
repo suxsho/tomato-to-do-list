@@ -10,6 +10,7 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app_state.dart';
+import 'force_rest.dart';
 import 'launch_args.dart';
 import 'mini_mode.dart';
 import 'screens/home_screen.dart';
@@ -26,8 +27,9 @@ Future<void> main() async {
   if (!kIsWeb && Platform.isAndroid) {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
-  // 自定义窗口标题栏仅在 Windows 上初始化（安卓上 window_manager 不可用）
-  if (!kIsWeb && Platform.isWindows) {
+  // 桌面窗口初始化：Windows（自定义标题栏）+ Linux（系统标题栏）。
+  // 安卓上 window_manager 不可用，跳过；强制休息全屏依赖这里的初始化。
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     await windowManager.ensureInitialized();
     // 默认横屏打开；小屏幕上按可用工作区收一点，别顶出屏幕
     var winSize = const Size(1120, 720);
@@ -48,7 +50,8 @@ Future<void> main() async {
         minimumSize: const Size(380, 520),
         center: true,
         title: '番茄任务清单',
-        titleBarStyle: TitleBarStyle.hidden, // 自定义标题栏
+        // Windows 用自绘标题栏（含 mini 入口）；Linux 保留系统标题栏，仍可拖动/关闭
+        titleBarStyle: Platform.isWindows ? TitleBarStyle.hidden : TitleBarStyle.normal,
       ),
       () async {
         await windowManager.show();
@@ -60,6 +63,10 @@ Future<void> main() async {
   await app.init();
   final mini = MiniModeController();
   await mini.init();
+  // 强制休息要全屏，必须先让 mini 小窗还原成正常窗口（mini 是固定 140×140 圆形）
+  ForceRest.beforeEnter = () async {
+    if (mini.mini) await mini.exit();
+  };
   runApp(
     MultiProvider(
       providers: [
@@ -117,6 +124,8 @@ class TomatoApp extends StatelessWidget {
             children: [
               Offstage(offstage: isMini, child: child!),
               if (isMini) const Positioned.fill(child: MiniTimerView()),
+              // 强制休息浮层置顶：到点全屏时盖住任何页面，解除按钮始终可见
+              const Positioned.fill(child: ForceRestOverlay()),
             ],
           ),
         );

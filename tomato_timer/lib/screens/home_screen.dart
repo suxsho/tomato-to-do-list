@@ -249,7 +249,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 2),
       child: Text(
-        '番茄钟 ${app.settings.focusMin} / ${app.settings.shortBreakMin} / ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息（在设置中修改）',
+        app.settings.noLongBreak
+            ? '番茄钟 ${app.settings.focusMin} / ${app.settings.shortBreakMin} 分钟 · 无长休息（在设置中修改）'
+            : '番茄钟 ${app.settings.focusMin} / ${app.settings.shortBreakMin} / ${app.settings.longBreakMin} 分钟 · 每 ${app.settings.longBreakEvery} 个长休息（在设置中修改）',
         style: TextStyle(color: AppColors.textGray, fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );

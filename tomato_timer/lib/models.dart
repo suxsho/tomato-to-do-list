@@ -100,6 +100,7 @@ class Settings {
   bool keepScreenOn; // 专注时屏幕常亮（仅安卓生效/可见）
   bool vibrateOn; // 到时震动提醒（仅安卓生效/可见）
   bool notifyOn; // 计时到点发系统通知（安卓通知栏 / Windows 托盘气泡）
+  bool forceRestOn; // 强制休息：专注到点自动全屏（仅 Windows / Linux 桌面端）
   double fontScale; // 全局字体缩放：0.9=小 / 1.0=标准 / 1.15=大
 
   // WebDAV 云同步
@@ -112,6 +113,7 @@ class Settings {
   bool autoResetAfterGap; // 久置自动重置番茄周期：距上次休息超过其时长则归零 cycleDone
   bool dailyResetOn; // 每天番茄清零：以凌晨 5:00 为日界，跨天把任务当日进度归零（历史记录保留）
   bool noEstimate; // 无总番茄预估：不用设置预估番茄数，任务长期复用、不自动结束
+  bool noLongBreak; // 无长番茄休息：不管完成多少个番茄，始终只休息 5 分钟（短休）
 
   Settings({
     this.focusMin = 25,
@@ -125,6 +127,7 @@ class Settings {
     this.keepScreenOn = true,
     this.vibrateOn = true,
     this.notifyOn = true,
+    this.forceRestOn = false,
     this.fontScale = 1.0,
     this.webdavOn = false,
     this.webdavAutoSync = false,
@@ -135,6 +138,7 @@ class Settings {
     this.autoResetAfterGap = true,
     this.dailyResetOn = false,
     this.noEstimate = false,
+    this.noLongBreak = false,
   });
 
   bool get webdavConfigured => webdavUrl.trim().isNotEmpty && webdavUser.trim().isNotEmpty;
@@ -151,6 +155,7 @@ class Settings {
         'keepScreenOn': keepScreenOn,
         'vibrateOn': vibrateOn,
         'notifyOn': notifyOn,
+        'forceRestOn': forceRestOn,
         'fontScale': fontScale,
         'webdavOn': webdavOn,
         'webdavAutoSync': webdavAutoSync,
@@ -161,6 +166,7 @@ class Settings {
         'autoResetAfterGap': autoResetAfterGap,
         'dailyResetOn': dailyResetOn,
         'noEstimate': noEstimate,
+        'noLongBreak': noLongBreak,
       };
 
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
@@ -175,6 +181,7 @@ class Settings {
         keepScreenOn: j['keepScreenOn'] != false,
         vibrateOn: j['vibrateOn'] != false,
         notifyOn: j['notifyOn'] != false,
+        forceRestOn: j['forceRestOn'] == true,
         fontScale: (j['fontScale'] as num?)?.toDouble() ?? 1.0,
         webdavOn: j['webdavOn'] == true,
         webdavAutoSync: j['webdavAutoSync'] == true,
@@ -185,6 +192,7 @@ class Settings {
         autoResetAfterGap: j['autoResetAfterGap'] == true,
         dailyResetOn: j['dailyResetOn'] == true,
         noEstimate: j['noEstimate'] == true,
+        noLongBreak: j['noLongBreak'] == true,
       );
 }
 
