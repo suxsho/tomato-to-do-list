@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use // window_manager 0.6 legacy API（官方过渡桥，未来移除时再迁移 native API）
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -7,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:window_manager/legacy.dart';
 
 import 'app_state.dart';
 import 'models.dart';
@@ -66,41 +67,56 @@ class MiniModeController extends ChangeNotifier
     if (!supported || mini || _busy) return;
     _busy = true;
     try {
-      if (await windowManager.isMaximized()) await windowManager.unmaximize();
-      _restoreBounds = await windowManager.getBounds();
-      _restorePinned = await windowManager.isAlwaysOnTop();
+      // 各步独立容错：桌面上某个窗口调用失败（Linux 端插件实现差异 /
+      // 特定 WM 不支持）不应中断整个流程——只要 UI 状态切过去，
+      // 圆窗至少"可用"（置顶/拖动/暂停/返回），视觉再尽力而为。
+      try {
+        if (await windowManager.isMaximized()) await windowManager.unmaximize();
+        _restoreBounds = await windowManager.getBounds();
+        _restorePinned = await windowManager.isAlwaysOnTop();
+      } catch (_) {}
 
       // 注意：不能调用 setResizable(false)。window_manager 在 Windows 上
       // 会用 WM_NCHITTEST -> HTNOWHERE 实现"不可调整大小"，那会让整个窗口
       // 连点击/拖动都收不到。改用 min/max 把尺寸锁死。
-      await windowManager.setMinimumSize(const Size(windowSize, windowSize));
-      await windowManager.setMaximumSize(const Size(windowSize, windowSize));
-      await windowManager.setAsFrameless();
-      await windowManager.setHasShadow(false);
-      await windowManager.setSize(const Size(windowSize, windowSize));
-      await windowManager.setBackgroundColor(Colors.transparent);
+      try {
+        await windowManager.setMinimumSize(const Size(windowSize, windowSize));
+        await windowManager.setMaximumSize(const Size(windowSize, windowSize));
+      } catch (_) {}
+      try {
+        await windowManager.setAsFrameless();
+        await windowManager.setHasShadow(false);
+      } catch (_) {}
+      try {
+        await windowManager.setSize(const Size(windowSize, windowSize));
+        await windowManager.setBackgroundColor(Colors.transparent);
+      } catch (_) {}
 
-      final x = _prefs?.getDouble(_kX);
-      final y = _prefs?.getDouble(_kY);
-      if (x != null && y != null) {
-        await windowManager.setPosition(Offset(x, y));
-      } else {
-        await windowManager.setAlignment(Alignment.bottomRight);
-        final p = await windowManager.getPosition();
-        await windowManager.setPosition(Offset(p.dx - 16, p.dy - 16));
-      }
-      // 保存的坐标可能来自另一块更宽的屏 / 上一次的多屏布局，换到窄屏后
-      // 窗口会整个落到屏幕外（进程还在，只是看不见）。这里统一纠正一次。
-      await _ensureVisible();
-      await windowManager.setAlwaysOnTop(pinned);
+      try {
+        final x = _prefs?.getDouble(_kX);
+        final y = _prefs?.getDouble(_kY);
+        if (x != null && y != null) {
+          await windowManager.setPosition(Offset(x, y));
+        } else {
+          await windowManager.setAlignment(Alignment.bottomRight);
+          final p = await windowManager.getPosition();
+          await windowManager.setPosition(Offset(p.dx - 16, p.dy - 16));
+        }
+        // 保存的坐标可能来自另一块更宽的屏 / 上一次的多屏布局，换到窄屏后
+        // 窗口会整个落到屏幕外（进程还在，只是看不见）。这里统一纠正一次。
+        await _ensureVisible();
+        await windowManager.setAlwaysOnTop(pinned);
+      } catch (_) {}
 
       mini = true;
       notifyListeners();
       _startGuard();
 
-      // 等 native 侧把尺寸/setBounds 落地后再裁剪，否则会裁到旧尺寸
-      await Future<void>.delayed(const Duration(milliseconds: 180));
-      Win32Region.applyCircle();
+      if (Platform.isWindows) {
+        // 等 native 侧把尺寸/setBounds 落地后再裁剪，否则会裁到旧尺寸
+        await Future<void>.delayed(const Duration(milliseconds: 180));
+        Win32Region.applyCircle();
+      }
     } finally {
       _busy = false;
     }
@@ -111,26 +127,26 @@ class MiniModeController extends ChangeNotifier
     _busy = true;
     try {
       _stopGuard();
-      await _savePosition();
+      try {
+        await _savePosition();
+      } catch (_) {}
       Win32Region.reset(); // 必须先解除圆形裁剪，否则放大后主界面会被裁掉
-      // Linux 进入 mini 时 setAsFrameless 去掉了系统标题栏，退出时必须恢复，
-      // 否则主界面没有标题栏、无法拖动/关闭。Windows 用自绘标题栏，无需处理。
-      if (Platform.isLinux) {
-        await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-      }
-      await windowManager.setBackgroundColor(AppColors.pageBg);
-      // 注意：不能用 Size(-1,-1) 解除上限 —— Windows 端 SetMaximumSize 只在
-      // width/height >= 0 时写入，传负数会被静默忽略，窗口会一直卡在 140x140。
-      await windowManager.setMaximumSize(const Size(10000, 10000));
-      await windowManager.setMinimumSize(const Size(380, 520));
-      await windowManager.setAlwaysOnTop(_restorePinned);
-      if (_restoreBounds != null) {
-        await windowManager.setBounds(_restoreBounds);
-      } else {
-        await windowManager.setSize(const Size(1120, 720));
-        await windowManager.setAlignment(Alignment.center);
-      }
-      await windowManager.setHasShadow(true);
+      // 桌面端统一自绘标题栏（TitleBarStyle.hidden），退出 mini 无需恢复系统标题栏
+      try {
+        await windowManager.setBackgroundColor(AppColors.pageBg);
+        // 注意：不能用 Size(-1,-1) 解除上限 —— Windows 端 SetMaximumSize 只在
+        // width/height >= 0 时写入，传负数会被静默忽略，窗口会一直卡在 140x140。
+        await windowManager.setMaximumSize(const Size(10000, 10000));
+        await windowManager.setMinimumSize(const Size(380, 520));
+        await windowManager.setAlwaysOnTop(_restorePinned);
+        if (_restoreBounds != null) {
+          await windowManager.setBounds(_restoreBounds);
+        } else {
+          await windowManager.setSize(const Size(1120, 720));
+          await windowManager.setAlignment(Alignment.center);
+        }
+        await windowManager.setHasShadow(true);
+      } catch (_) {}
       mini = false;
       notifyListeners();
     } finally {

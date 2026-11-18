@@ -165,8 +165,8 @@ class _TimerFlowScreenState extends State<TimerFlowScreen> with TickerProviderSt
     final bg = isBreak ? AppColors.breakBg : AppColors.focusBg;
     final accent = (isBreak || focusEnded) ? AppColors.green : AppColors.red;
     final paused = s.isPaused;
-    // Windows 自定义标题栏高 40，到点浮层不盖它，关闭/最小化/置顶仍可点
-    final titleBarH = Platform.isWindows ? 40.0 : 0.0;
+    // 桌面端自绘标题栏高 40，到点浮层不盖它，关闭/最小化/置顶仍可点
+    final titleBarH = (Platform.isWindows || Platform.isLinux) ? 40.0 : 0.0;
 
     // 顶部按钮自动隐藏 / 防烧屏状态
     final autoHide = _isFocusRunning(s);

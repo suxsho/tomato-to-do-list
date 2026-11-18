@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
-import '../mini_mode.dart';
 import '../theme.dart';
 import '../webdav.dart';
 import '../widgets/tomato_view.dart';
@@ -533,19 +532,6 @@ class MineScreen extends StatelessWidget {
                   onChanged: (_) => app.toggleForceRest(),
                 ),
               ],
-            ),
-          ),
-        // 迷你小窗（Windows / Linux 桌面端）：缩小成桌面圆形小组件
-        // Linux 用系统标题栏、没有自绘的 mini 按钮，这里统一提供入口
-        if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
-          SoftCard(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: _row(
-              context,
-              Icons.picture_in_picture_alt,
-              '迷你小窗',
-              '缩小成桌面圆形小组件，双击圆窗返回',
-              () => context.read<MiniModeController>().enter(),
             ),
           ),
         // 文件数据

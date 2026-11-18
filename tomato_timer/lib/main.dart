@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use // window_manager 0.6 legacy API（官方过渡桥，未来移除时再迁移 native API）
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -7,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:screen_retriever/screen_retriever.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:window_manager/legacy.dart';
 
 import 'app_state.dart';
 import 'force_rest.dart';
@@ -27,7 +28,7 @@ Future<void> main() async {
   if (!kIsWeb && Platform.isAndroid) {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
-  // 桌面窗口初始化：Windows（自定义标题栏）+ Linux（系统标题栏）。
+  // 桌面窗口初始化：Windows / Linux 统一自绘标题栏。
   // 安卓上 window_manager 不可用，跳过；强制休息全屏依赖这里的初始化。
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     await windowManager.ensureInitialized();
@@ -50,8 +51,8 @@ Future<void> main() async {
         minimumSize: const Size(380, 520),
         center: true,
         title: '番茄任务清单',
-        // Windows 用自绘标题栏（含 mini 入口）；Linux 保留系统标题栏，仍可拖动/关闭
-        titleBarStyle: Platform.isWindows ? TitleBarStyle.hidden : TitleBarStyle.normal,
+        // Windows / Linux 统一自绘标题栏（含 mini 入口、置顶、窗口按钮）
+        titleBarStyle: TitleBarStyle.hidden,
       ),
       () async {
         await windowManager.show();

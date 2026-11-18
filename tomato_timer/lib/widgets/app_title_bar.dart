@@ -1,20 +1,22 @@
+// ignore_for_file: deprecated_member_use // window_manager 0.6 legacy API（官方过渡桥，未来移除时再迁移 native API）
 import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:window_manager/legacy.dart';
 
 import '../mini_mode.dart';
 import '../theme.dart';
 
 /// 自定义标题栏：拖拽移动 + 双击最大化 + 置顶胶囊 Toggle + 窗口按钮
-/// 主界面与计时页共用；仅 Windows 显示，安卓上返回空（无窗口概念）
+/// 主界面与计时页共用；Windows / Linux 显示（Linux 之前用系统标题栏，
+/// 现统一为自绘，保证 mini 入口与窗口控制跟 Windows 一致），安卓返回空
 class AppTitleBar extends StatefulWidget {
   const AppTitleBar({super.key});
 
-  static final bool _show = !kIsWeb && Platform.isWindows;
+  static final bool _show = !kIsWeb && (Platform.isWindows || Platform.isLinux);
 
   @override
   State<AppTitleBar> createState() => _AppTitleBarState();

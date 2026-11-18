@@ -1,10 +1,11 @@
+// ignore_for_file: deprecated_member_use // window_manager 0.6 legacy API（官方过渡桥，未来移除时再迁移 native API）
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:window_manager/legacy.dart';
 
 import 'app_state.dart';
 import 'models.dart';
