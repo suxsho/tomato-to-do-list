@@ -79,7 +79,7 @@ Future<void> main() async {
 
   // 桌面快捷方式带 --mini 时，启动后直接变成圆形小组件。
   // 等首帧渲染完再改窗口，避免 native 侧还没准备好就被 setBounds。
-  if (!kIsWeb && Platform.isWindows && LaunchArgs.contains('--mini')) {
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux) && LaunchArgs.contains('--mini')) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future<void>.delayed(const Duration(milliseconds: 400));
       await mini.enter();

@@ -39,7 +39,10 @@ class MiniModeController extends ChangeNotifier
   bool mini = false;
   bool pinned = true;
 
-  bool get supported => !kIsWeb && Platform.isWindows;
+  // Windows / Linux 桌面端都支持迷你小窗。核心能力（无边框、透明、置顶、
+  // 拖动）window_manager 在 Linux 上均可用；仅 Win32Region 的圆形裁剪在
+  // Linux 上是空操作——圆外那圈透明区域仍会接收点击（视觉是圆的，点击区是方的）。
+  bool get supported => !kIsWeb && (Platform.isWindows || Platform.isLinux);
 
   SharedPreferences? _prefs;
   Rect? _restoreBounds;
@@ -110,6 +113,11 @@ class MiniModeController extends ChangeNotifier
       _stopGuard();
       await _savePosition();
       Win32Region.reset(); // 必须先解除圆形裁剪，否则放大后主界面会被裁掉
+      // Linux 进入 mini 时 setAsFrameless 去掉了系统标题栏，退出时必须恢复，
+      // 否则主界面没有标题栏、无法拖动/关闭。Windows 用自绘标题栏，无需处理。
+      if (Platform.isLinux) {
+        await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+      }
       await windowManager.setBackgroundColor(AppColors.pageBg);
       // 注意：不能用 Size(-1,-1) 解除上限 —— Windows 端 SetMaximumSize 只在
       // width/height >= 0 时写入，传负数会被静默忽略，窗口会一直卡在 140x140。

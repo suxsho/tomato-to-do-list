@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../mini_mode.dart';
 import '../theme.dart';
 import '../webdav.dart';
 import '../widgets/tomato_view.dart';
@@ -258,7 +259,7 @@ class MineScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text('番茄任务清单', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark)),
               const SizedBox(height: 2),
-              Text('Minimal Focus Timer v0.6.0', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
+              Text('Minimal Focus Timer v0.6.1', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textGray)),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -367,7 +368,7 @@ class MineScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                child: const Text('版本 0.6.0 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                child: const Text('版本 0.6.1 · 本地优先 · 可云同步', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -532,6 +533,19 @@ class MineScreen extends StatelessWidget {
                   onChanged: (_) => app.toggleForceRest(),
                 ),
               ],
+            ),
+          ),
+        // 迷你小窗（Windows / Linux 桌面端）：缩小成桌面圆形小组件
+        // Linux 用系统标题栏、没有自绘的 mini 按钮，这里统一提供入口
+        if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
+          SoftCard(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _row(
+              context,
+              Icons.picture_in_picture_alt,
+              '迷你小窗',
+              '缩小成桌面圆形小组件，双击圆窗返回',
+              () => context.read<MiniModeController>().enter(),
             ),
           ),
         // 文件数据
